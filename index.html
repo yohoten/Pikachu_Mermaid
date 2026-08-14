@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#27273a">
+<title>Pikachu Mermaid — 图表编辑器</title>
+<link rel="icon" type="image/x-icon" href="Pikachu_Mermaid.ico">
+<link rel="shortcut icon" type="image/x-icon" href="Pikachu_Mermaid.ico">
+<link rel="apple-touch-icon" href="Pikachu_Mermaid.ico">
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --panel: #27273a;
+    --panel2: #2f2f45;
+    --border: #3a3a52;
+    --text: #d8d8e8;
+    --muted: #8a8aa0;
+    --accent: #6c9bff;
+    --accent2: #5ad1a0;
+    --danger: #ff6b6b;
+    --keyword: #7db4ff;
+    --comment: #6fce8a;
+    --arrow: #ff8a8a;
+    --number: #d9a5ff;
+    --string: #ffd27f;
+    --caret: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── 工具栏 ── */
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  #toolbar button {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  #toolbar button:hover { background: #3c3c58; border-color: var(--accent); }
+  #toolbar button:disabled { opacity: .4; cursor: default; }
+  #toolbar button:disabled:hover { background: var(--panel2); border-color: var(--border); }
+  #toolbar .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+  #toolbar select {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 4px 6px;
+    font-size: 12.5px;
+  }
+  .tb-label { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+  /* ── 主区域 ── */
+  #main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  #editorPane { display: flex; flex-direction: column; min-width: 0; }
+  #previewPane { display: flex; flex-direction: column; min-width: 0; }
+  .pane-title {
+    padding: 5px 10px;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #divider {
+    width: 5px;
+    cursor: col-resize;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background .15s;
+  }
+  #divider:hover, #divider.active { background: var(--accent); }
+
+  /* ── 编辑器（透明 textarea + 高亮层）── */
+  #editorWrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+  #editorHighlight {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    margin: 0; padding: 12px;
+    font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre;
+    overflow: hidden;
+    color: var(--text);
+    pointer-events: none;
+    z-index: 0;
+    border: 1px solid transparent;
+  }
+  #editor {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    margin: 0; padding: 12px;
+    font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--caret);
+    border: none; outline: none; resize: none;
+    white-space: pre; overflow: auto;
+    tab-size: 4;
+    z-index: 1;
+  }
+  #editor::selection { background: rgba(108,155,255,.3); }
+
+  /* 高亮 token */
+  .tok-kw { color: var(--keyword); font-weight: 600; }
+  .tok-arrow { color: var(--arrow); font-weight: 600; }
+  .tok-comment { color: var(--comment); font-style: italic; }
+  .tok-num { color: var(--number); }
+  .tok-str { color: var(--string); }
+  .tok-err { text-decoration: underline wavy var(--danger); text-decoration-skip-ink: none; }
+
+  /* ── 模板管理弹窗 ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.55);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    width: 560px;
+    max-width: 92vw;
+    max-height: 85vh;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .modal h3 { font-size: 14px; color: var(--text); margin: 0; }
+  .modal-row { display: flex; gap: 8px; align-items: center; }
+  .modal label { font-size: 12px; color: var(--muted); min-width: 52px; }
+  .modal input[type=text] {
+    flex: 1;
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 5px 8px; font-size: 12.5px;
+  }
+  .modal textarea {
+    flex: 1; resize: vertical; min-height: 220px;
+    font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: 12.5px; line-height: 1.5;
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 8px; white-space: pre;
+  }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-actions button {
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 5px 12px; font-size: 12.5px; cursor: pointer;
+  }
+  .modal-actions button:hover { border-color: var(--accent); }
+  .modal-actions button.danger:hover { border-color: var(--danger); color: var(--danger); }
+  .modal-list { display: flex; gap: 6px; flex-wrap: wrap; }
+  .modal-list .chip {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 3px 10px; font-size: 12px;
+    cursor: pointer; color: var(--text);
+  }
+  .modal-list .chip.active { border-color: var(--accent); background: #3c3c58; }
+  .modal-list .chip .del { color: var(--muted); margin-left: 5px; }
+  .modal-list .chip .del:hover { color: var(--danger); }
+
+  /* ── 预览 ── */
+  #previewScroll { flex: 1; overflow: auto; padding: 20px; background: #ffffff; }
+  #previewContainer { min-width: 100%; display: inline-block; }
+  #previewContainer svg { max-width: none !important; display: block; }
+
+  /* ── 状态栏 ── */
+  #statusbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 4px 12px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+    flex-shrink: 0;
+  }
+  #statusbar .right { margin-left: auto; }
+  #renderState { color: var(--accent2); }
+  #chartTypeTag { color: var(--accent); }
+
+  /* ── 隐藏文件输入 ── */
+  #fileInput { display: none; }
+
+  .error-banner {
+    background: #3a2430;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-width: 100%;
+  }
+
+  /* ── 打印 / 导出 PDF ── */
+  @media print {
+    body { background: #ffffff !important; overflow: visible !important; }
+    #toolbar, #editorPane, #divider, #statusbar, #fileInput { display: none !important; }
+    #main { display: block !important; }
+    #previewPane { flex: none !important; width: 100% !important; }
+    .pane-title { display: none !important; }
+    #previewScroll {
+      overflow: visible !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+    }
+    #previewContainer { min-width: 0 !important; }
+    #previewContainer svg {
+      max-width: 100% !important;
+      height: auto !important;
+      width: auto !important;
+    }
+    .error-banner { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="toolbar">
+    <button id="btnNew" title="新建文件 (Ctrl+N)">新建</button>
+    <button id="btnOpen" title="打开 .mmd / .txt 文件 (Ctrl+O)">打开</button>
+    <button id="btnSave" title="保存 .mmd 文件 (Ctrl+S)">保存</button>
+    <span class="sep"></span>
+    <button id="btnUndo" title="撤销 (Ctrl+Z)" disabled>撤销</button>
+    <button id="btnRedo" title="重做 (Ctrl+Y)" disabled>重做</button>
+    <span class="sep"></span>
+    <span class="tb-label">模板:</span>
+    <select id="templateSelect"></select>
+    <button id="btnManageTemplates" title="管理模板（新增/编辑/删除/导入导出）">模板管理</button>
+    <span class="sep"></span>
+    <button id="btnZoomOut" title="缩小">−</button>
+    <button id="btnZoomReset" title="重置缩放">100%</button>
+    <button id="btnZoomIn" title="放大">+</button>
+    <span class="sep"></span>
+    <span class="tb-label">主题:</span>
+    <select id="themeSelect">
+      <option value="default">默认</option>
+      <option value="neutral">中性</option>
+      <option value="dark">暗色</option>
+      <option value="forest">森林</option>
+    </select>
+    <span class="sep"></span>
+    <button id="btnExportPng" title="导出 PNG 图片">导出 PNG</button>
+    <button id="btnExportSvg" title="导出 SVG 图片">导出 SVG</button>
+    <button id="btnExportPdf" title="导出 PDF（打开系统打印对话框，选择目标为 PDF 即可）">导出 PDF</button>
+    <select id="pngBgSelect" title="PNG 导出背景">
+      <option value="theme">PNG背景·主题</option>
+      <option value="white">PNG背景·白</option>
+      <option value="transparent">PNG背景·透明</option>
+    </select>
+    <span class="sep"></span>
+    <button id="btnCopyMd" title="复制 Mermaid 代码块（Markdown）">复制 Markdown</button>
+    <button id="btnCopySvg" title="复制 SVG 源码">复制 SVG</button>
+  </div>
+
+  <div id="main">
+    <div id="editorPane" style="flex:1 1 30%">
+      <div class="pane-title">
+        <span>Mermaid 代码编辑器</span>
+        <span id="editorStats">0 行 · 0 字符</span>
+      </div>
+      <div id="editorWrap">
+        <pre id="editorHighlight" aria-hidden="true"><code></code></pre>
+        <textarea id="editor" spellcheck="false" autocomplete="off"
+          autocorrect="off" autocapitalize="off"
+          placeholder="在这里输入 Mermaid 代码，例如：&#10;graph TD&#10;    A[开始] --> B[结束]"></textarea>
+      </div>
+    </div>
+
+    <div id="divider"></div>
+
+    <div id="previewPane" style="flex:1 1 70%">
+      <div class="pane-title">
+        <span>实时预览</span>
+        <span id="chartTypeTag">未检测</span>
+      </div>
+      <div id="previewScroll">
+        <div id="previewContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="statusbar">
+    <span>Pikachu Mermaid · 纯 Web 零依赖版</span>
+    <span id="renderState">就绪</span>
+    <span class="right" id="fileName">未命名.mmd</span>
+  </div>
+
+  <input type="file" id="fileInput" accept=".mmd,.mermaid,.txt,text/plain">
+  <input type="file" id="tmplImportFile" accept=".json,application/json" hidden>
+
+  <!-- 模板管理弹窗 -->
+  <div id="templateModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>模板管理</h3>
+      <div class="modal-list" id="tmplChips"></div>
+      <div class="modal-row">
+        <label>名称</label>
+        <input type="text" id="tmplName" placeholder="模板名称">
+      </div>
+      <div class="modal-row">
+        <label>代码</label>
+        <textarea id="tmplCode" spellcheck="false" placeholder="Mermaid 代码"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="tmplNew">新增</button>
+        <button id="tmplSave">保存</button>
+        <button id="tmplDelete" class="danger">删除</button>
+        <button id="tmplExport">导出 JSON</button>
+        <button id="tmplImport">导入 JSON</button>
+        <button id="tmplClose">关闭</button>
+      </div>
+    </div>
+  </div>
+
+<script src="mermaid.min.js"></script>
+<script>
+"use strict";
+
+/* =====================================================================
+ * 模板（从原 templates/templates.json 迁移，内嵌避免 file:// 下 fetch 受限）
+ * ===================================================================== */
+const DEFAULT_TEMPLATES = [
+  { name: "流程图",       code: "graph TD\n    A[开始] --> B{判断条件A?}\n    B -->|是| C[执行操作1]\n    B -->|否| D[执行操作2]\n    C --> E[处理结果]\n    D --> E\n    E --> F[结束]\n" },
+  { name: "序列图",       code: "sequenceDiagram\n    participant A as 客户端\n    participant B as 服务器\n    participant C as 数据库\n    A->>B: 发送请求\n    B->>C: 查询数据\n    C-->>B: 返回结果\n    B-->>A: 响应数据\n" },
+  { name: "甘特图",       code: "gantt\n    title 项目开发计划\n    dateFormat  YYYY-MM-DD\n    section 需求分析\n    需求调研     :a1, 2024-01-01, 7d\n    需求评审     :a2, after a1, 3d\n    section 开发\n    前端开发     :b1, after a2, 14d\n    后端开发     :b2, after a2, 14d\n    section 测试\n    集成测试     :c1, after b1, 7d\n    发布上线     :c2, after c1, 2d\n" },
+  { name: "类图",         code: "classDiagram\n    class Animal {\n        +string name\n        +int age\n        +makeSound()\n    }\n    class Dog {\n        +string breed\n        +bark()\n    }\n    class Cat {\n        +string color\n        +meow()\n    }\n    Animal <|-- Dog\n    Animal <|-- Cat\n" },
+  { name: "状态图",       code: "stateDiagram-v2\n    [*] --> 空闲\n    空闲 --> 处理中: 收到请求\n    处理中 --> 完成: 处理成功\n    处理中 --> 错误: 处理失败\n    错误 --> 处理中: 重试\n    完成 --> [*]\n" },
+  { name: "饼图",         code: "pie\n    title 市场份额分布\n    \"产品A\": 40\n    \"产品B\": 30\n    \"产品C\": 20\n    \"其他\": 10\n" },
+  { name: "思维导图",     code: "mindmap\n  root((项目规划))\n    需求\n      用户调研\n      竞品分析\n    设计\n      UI设计\n      架构设计\n    开发\n      前端\n      后端\n    测试\n      单元测试\n      集成测试\n" },
+  { name: "象限图",       code: "quadrantChart\n    title 产品优先级分析\n    x-axis \"低价值\" --> \"高价值\"\n    y-axis \"低复杂度\" --> \"高复杂度\"\n    quadrant-1 \"优先开发\"\n    quadrant-2 \"评估后开发\"\n    quadrant-3 \"暂缓\"\n    quadrant-4 \"不开发\"\n    \"功能A\": [0.8, 0.3]\n    \"功能B\": [0.6, 0.7]\n    \"功能C\": [0.3, 0.4]\n" },
+  { name: "雷达图",       code: "radar-beta\n    axis 性能, 可维护性, 用户体验,\n         安全性, 扩展性\n    curve 系统A: 4, 3, 5, 4, 3\n    curve 系统B: 3, 5, 3, 5, 4\n    max: 5\n    min: 0\n" },
+];
+
+/* =====================================================================
+ * 模板存储（localStorage 持久化，支持用户自定义）
+ * ===================================================================== */
+const TEMPLATES_KEY = "pikachu_mermaid_templates_v1";
+let templates = loadTemplates();
+
+function loadTemplates() {
+  try {
+    const raw = localStorage.getItem(TEMPLATES_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length && arr.every(t => t && typeof t.name === "string" && typeof t.code === "string")) {
+        return arr;
+      }
+    }
+  } catch (e) { /* 解析失败回退默认 */ }
+  // 首次运行：写入默认模板
+  const defaults = DEFAULT_TEMPLATES.map(t => ({ ...t }));
+  try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(defaults)); } catch (e) {}
+  return defaults;
+}
+function saveTemplates() {
+  try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates)); } catch (e) {}
+}
+function refreshTemplateSelect(keepValue) {
+  const prev = keepValue ? templateSelect.value : null;
+  templateSelect.innerHTML = "";
+  templates.forEach((t, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    opt.textContent = t.name;
+    templateSelect.appendChild(opt);
+  });
+  if (prev !== null && templates[prev]) templateSelect.value = prev;
+}
+function applyTemplate(idx) {
+  const t = templates[idx];
+  if (!t) return;
+  if (isDirty() && !confirm("切换模板将覆盖当前内容，确定吗？")) return;
+  prevTemplateValue = String(idx);
+  editor.value = t.code;
+  history.reset();
+  markSaved();
+  clearDraft();
+  updateStats();
+  highlightEditor();
+  renderPreview();
+}
+
+/* =====================================================================
+ * 图表类型检测（关键词 → 中文名）
+ * ===================================================================== */
+function detectChartType(code) {
+  if (!code.trim()) return "空";
+  const rules = [
+    ["graph|flowchart", "流程图"], ["sequenceDiagram", "序列图"],
+    ["gantt", "甘特图"], ["classDiagram", "类图"],
+    ["stateDiagram", "状态图"], ["pie", "饼图"], ["mindmap", "思维导图"],
+    ["quadrantChart", "象限图"], ["radar", "雷达图"], ["timeline", "时间线"],
+    ["gitGraph", "Git 图"], ["journey", "用户旅程图"], ["erDiagram", "ER 图"],
+    ["xychart", "XY 图"], ["block-beta", "块图"], ["sankey-beta", "桑基图"],
+  ];
+  for (const [pattern, label] of rules) {
+    if (new RegExp("^\\s*" + pattern + "\\b", "m").test(code)) return label;
+  }
+  return "未知";
+}
+
+/* =====================================================================
+ * 语法高亮（透明 textarea + 高亮层叠加，零依赖）
+ * ===================================================================== */
+const HL_KEYWORDS = [
+  "graph","flowchart","subgraph","end","direction","style","classDef","class","linkStyle","click",
+  "sequenceDiagram","participant","actor","activate","deactivate","note","loop","alt","opt","par","critical","break","rect",
+  "gantt","title","dateFormat","section","milestone","excludes",
+  "pie","showData",
+  "stateDiagram-v2","stateDiagram","state","choice","fork","join","note","direction",
+  "classDiagram","namespace","direction","note",
+  "erDiagram",
+  "journey",
+  "mindmap","root",
+  "quadrantChart","x-axis","y-axis","quadrant-1","quadrant-2","quadrant-3","quadrant-4",
+  "radar-beta","axis","curve","max","min",
+  "timeline","accTitle","accDescr",
+  "gitGraph","merge","commit","branch","checkout","cherry-pick","reset","tag",
+  "xychart-beta","line","bar","baseline","left-axis","right-axis","title",
+  "sankey-beta","link",
+  "flowchart-v2","erDiagram-v2","classDiagram-v2",
+];
+const ARROWS = ["-->","->>","--x","--o","-.->","==>","<-->","o--","<|--","*--","->","=>","--",">>","..>","<--"];
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function highlight(code, errorLine) {
+  let out = "";
+  let i = 0;
+  const n = code.length;
+  let line = 1; // 当前行号（从 1 计）
+  // 在行首需要包裹错误标记的起始
+  const openErr = errorLine ? '<span class="tok-err">' : "";
+  const closeErr = errorLine ? "</span>" : "";
+  let lineOpen = false; // 当前行是否已包裹错误标记
+  function maybeOpen() {
+    if (errorLine === line && !lineOpen) {
+      out += openErr;
+      lineOpen = true;
+    }
+  }
+  function maybeClose() {
+    if (lineOpen) {
+      out += closeErr;
+      lineOpen = false;
+    }
+  }
+  // 依次扫描：注释、字符串、关键字、箭头、数字
+  while (i < n) {
+    const ch = code[i];
+    maybeOpen();
+    // 注释 %%
+    if (ch === "%" && code[i + 1] === "%") {
+      let j = code.indexOf("\n", i);
+      if (j === -1) j = n;
+      out += '<span class="tok-comment">' + escapeHtml(code.slice(i, j)) + "</span>";
+      i = j;
+      continue;
+    }
+    // 字符串
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < n && code[j] !== ch) j++;
+      if (j >= n) j = n;
+      out += '<span class="tok-str">' + escapeHtml(code.slice(i, j + 1)) + "</span>";
+      i = j + 1;
+      continue;
+    }
+    // 单词 → 关键字
+    if (/[A-Za-z\u4e00-\u9fa5_]/.test(ch)) {
+      let j = i;
+      while (j < n && /[A-Za-z0-9\u4e00-\u9fa5_-]/.test(code[j])) j++;
+      const word = code.slice(i, j);
+      out += HL_KEYWORDS.includes(word)
+        ? '<span class="tok-kw">' + word + "</span>"
+        : escapeHtml(word);
+      i = j;
+      continue;
+    }
+    // 箭头（长匹配优先）
+    let matchedArrow = null;
+    for (const a of ARROWS) {
+      if (code.startsWith(a, i)) { matchedArrow = a; break; }
+    }
+    if (matchedArrow) {
+      out += '<span class="tok-arrow">' + escapeHtml(matchedArrow) + "</span>";
+      i += matchedArrow.length;
+      continue;
+    }
+    // 数字
+    if (/[0-9]/.test(ch)) {
+      let j = i;
+      while (j < n && /[0-9.]/.test(code[j])) j++;
+      out += '<span class="tok-num">' + escapeHtml(code.slice(i, j)) + "</span>";
+      i = j;
+      continue;
+    }
+    // 换行 → 行号递增，关闭本行错误标记
+    if (ch === "\n") {
+      line++;
+      maybeClose();
+      out += "\n";
+      i++;
+      continue;
+    }
+    // 普通字符
+    out += escapeHtml(ch);
+    i++;
+  }
+  // 结束未闭合的错误标记
+  maybeClose();
+  return out;
+}
+
+/* =====================================================================
+ * 撤销 / 重做（自建历史栈，支持连续输入合并）
+ * ===================================================================== */
+class HistoryManager {
+  constructor(getText, setText, getSel, setSel) {
+    this.getText = getText;
+    this.setText = setText;
+    this.getSel = getSel;
+    this.setSel = setSel;
+    this.stack = [];
+    this.redoStack = [];
+    this.pendingBefore = null;
+  }
+  snap() { return { text: this.getText(), start: this.getSel()[0], end: this.getSel()[1] }; }
+  // 在输入前记录快照
+  beforeEdit() { this.pendingBefore = this.snap(); }
+  // 输入后合并/入栈
+  afterEdit() {
+    const after = this.snap();
+    const before = this.pendingBefore || after;
+    const top = this.stack[this.stack.length - 1];
+    // 若栈顶的 after 与本次 before 文本一致 → 连续输入，合并
+    if (top && top.after.text === before.text) {
+      top.after = after;
+    } else {
+      this.stack.push({ before, after });
+      if (this.stack.length > 200) this.stack.shift();
+    }
+    this.redoStack = [];
+    this.pendingBefore = null;
+    this.syncButtons();
+  }
+  undo() {
+    const item = this.stack.pop();
+    if (!item) return;
+    this.redoStack.push(item);
+    this.apply(item.before);
+  }
+  redo() {
+    const item = this.redoStack.pop();
+    if (!item) return;
+    this.stack.push(item);
+    this.apply(item.after);
+  }
+  apply(s) {
+    this.setText(s.text);
+    this.setSel(s.start, s.end);
+    this.pendingBefore = this.snap();
+    this.syncButtons();
+    renderPreview();
+  }
+  reset() {
+    this.stack = []; this.redoStack = []; this.pendingBefore = null;
+    this.syncButtons();
+  }
+  syncButtons() {
+    $("btnUndo").disabled = this.stack.length === 0;
+    $("btnRedo").disabled = this.redoStack.length === 0;
+  }
+  get canUndo() { return this.stack.length > 0; }
+  get canRedo() { return this.redoStack.length > 0; }
+}
+
+/* =====================================================================
+ * 全局状态
+ * ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const editor = $("editor");
+const highlightEl = $("editorHighlight").querySelector("code");
+const previewScroll = $("previewScroll");
+const previewContainer = $("previewContainer");
+
+let currentFile = null;        // 保存的文件名
+let currentContent = "";       // 最近一次保存/加载的内容快照（用于脏检查）
+let zoom = 1;
+let renderTimer = null;
+let isRendering = false;
+let lastTheme = null;          // 当前 mermaid 主题（变化时才重新 initialize）
+let draftTimer = null;         // 草稿自动保存定时器
+let lastErrorLine = null;      // 最近一次渲染错误行号
+let prevTemplateValue = "0";   // 模板下拉切换前的值（用于取消还原）
+const DRAFT_KEY = "pikachu_mermaid_draft_v1";
+
+const editorWrap = $("editorWrap");
+const history = new HistoryManager(
+  () => editor.value,
+  (t) => { editor.value = t; },
+  () => [editor.selectionStart, editor.selectionEnd],
+  (s, e) => { editor.setSelectionRange(s, e); }
+);
+
+/* =====================================================================
+ * 渲染预览
+ * ===================================================================== */
+const THEME_BG = { default: "#ffffff", neutral: "#ffffff", dark: "#1e1e2e", forest: "#f4f1ea" };
+function previewBg() { return THEME_BG[$("themeSelect").value] || "#ffffff"; }
+
+function showRenderError(err) {
+  const msg = String(err && err.message || err);
+  const m = msg.match(/(?:line|line number)\s+(\d+)/i);
+  lastErrorLine = m ? parseInt(m[1], 10) : null;
+  const box = document.createElement("div");
+  box.className = "error-banner";
+  box.textContent = "渲染失败：" + msg;
+  if (lastErrorLine) {
+    box.textContent += "\n\n[点击跳转到第 " + lastErrorLine + " 行]";
+    box.style.cursor = "pointer";
+    box.addEventListener("click", () => jumpToLine(lastErrorLine));
+  }
+  previewContainer.innerHTML = "";
+  previewContainer.appendChild(box);
+  // 刷新编辑器高亮，标记错误行波浪线
+  highlightEditor();
+}
+
+function jumpToLine(line) {
+  const lines = editor.value.split("\n");
+  let pos = 0;
+  for (let i = 0; i < Math.min(line - 1, lines.length); i++) pos += lines[i].length + 1;
+  editor.focus();
+  editor.setSelectionRange(pos, pos);
+  const ratio = Math.min(1, (line - 1) / Math.max(1, lines.length - 1));
+  editor.scrollTop = Math.round(ratio * (editor.scrollHeight - editor.clientHeight));
+}
+
+function scheduleDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ text: editor.value, file: currentFile || null, at: Date.now() }));
+    } catch (e) { /* 隐私模式 / 容量满时静默 */ }
+  }, 500);
+}
+
+function clearDraft() {
+  clearTimeout(draftTimer);
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+}
+
+function debouncedPreview() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(renderPreview, 200);
+}
+
+async function renderPreview() {
+  const code = editor.value;
+  if (isRendering) { debouncedPreview(); return; }
+  previewScroll.style.background = previewBg();
+  if (!code.trim()) {
+    previewContainer.innerHTML = "";
+    $("renderState").textContent = "就绪";
+    $("chartTypeTag").textContent = "空";
+    return;
+  }
+
+  isRendering = true;
+  $("renderState").textContent = "渲染中…";
+  const chartType = detectChartType(code);
+  $("chartTypeTag").textContent = chartType;
+
+  try {
+    const theme = $("themeSelect").value;
+    if (lastTheme !== theme) {
+      mermaid.initialize({ startOnLoad: false, theme: theme, securityLevel: "strict" });
+      lastTheme = theme;
+    }
+    const { svg } = await mermaid.render("preview-svg-" + Date.now(), code);
+    previewContainer.innerHTML = svg;
+    applyZoom();
+    $("renderState").textContent = "渲染成功";
+    // 渲染成功 → 清除错误波浪线
+    if (lastErrorLine !== null) {
+      lastErrorLine = null;
+      highlightEditor();
+    }
+  } catch (err) {
+    showRenderError(err);
+    $("renderState").textContent = "渲染失败";
+  } finally {
+    isRendering = false;
+  }
+}
+
+function applyZoom() {
+  const svg = previewContainer.querySelector("svg");
+  if (!svg) return;
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  if (vb && vb.width && vb.height) {
+    svg.style.width = (vb.width * zoom) + "px";
+    svg.style.height = (vb.height * zoom) + "px";
+  }
+}
+
+/* =====================================================================
+ * 状态栏 & 统计
+ * ===================================================================== */
+function updateStats() {
+  const text = editor.value;
+  const lines = text.split("\n").length;
+  $("editorStats").textContent = lines + " 行 · " + text.length + " 字符";
+}
+
+/* =====================================================================
+ * 脏检查
+ * ===================================================================== */
+function isDirty() {
+  return editor.value !== currentContent;
+}
+function setDirtyState() {
+  const dirty = isDirty();
+  document.title = (dirty ? "● " : "") + "Pikachu Mermaid — 图表编辑器";
+  $("fileName").textContent = (currentFile || "未命名.mmd") + (dirty ? " *" : "");
+}
+function markSaved() {
+  currentContent = editor.value;
+  setDirtyState();
+}
+
+/* =====================================================================
+ * 文件操作（File API + Blob 下载，支持 GBK 兼容）
+ * ===================================================================== */
+$("btnNew").addEventListener("click", () => {
+  if (isDirty() && !confirm("当前内容未保存，确定新建吗？")) return;
+  editor.value = templates[0].code;
+  currentFile = null;
+  history.reset();
+  markSaved();
+  clearDraft();
+  updateStats();
+  highlightEditor();
+  renderPreview();
+});
+$("btnOpen").addEventListener("click", () => {
+  if (isDirty() && !confirm("当前内容未保存，确定打开其他文件吗？")) return;
+  $("fileInput").value = "";
+  $("fileInput").click();
+});
+$("fileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const buf = await file.arrayBuffer();
+    let text = new TextDecoder("utf-8").decode(buf);
+    // UTF-8 解码出现替换符 → 尝试 GBK
+    if (text.indexOf("\uFFFD") !== -1) {
+      text = new TextDecoder("gbk").decode(buf);
+    }
+    editor.value = text;
+    currentFile = file.name;
+    history.reset();
+    markSaved();
+    clearDraft();
+    updateStats();
+    highlightEditor();
+    renderPreview();
+    $("renderState").textContent = "已打开：" + file.name;
+  } catch (err) {
+    alert("打开文件失败：" + err);
+  }
+});
+$("btnSave").addEventListener("click", saveFile);
+
+function saveFile() {
+  const name = prompt("保存为（.mmd）", currentFile || "未命名.mmd");
+  if (!name) return;
+  const blob = new Blob([editor.value], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  currentFile = name;
+  markSaved();
+  clearDraft();
+  $("renderState").textContent = "已保存：" + name;
+}
+
+/* =====================================================================
+ * 导出 PNG / SVG
+ * ===================================================================== */
+function getSvgString() {
+  const svg = previewContainer.querySelector("svg");
+  if (!svg) return null;
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  if (vb && vb.width && vb.height) {
+    clone.setAttribute("width", vb.width);
+    clone.setAttribute("height", vb.height);
+    clone.style.width = vb.width + "px";
+    clone.style.height = vb.height + "px";
+  }
+  return new XMLSerializer().serializeToString(clone);
+}
+
+$("btnExportSvg").addEventListener("click", () => {
+  const svgStr = getSvgString();
+  if (!svgStr) { alert("预览区为空，无法导出"); return; }
+  const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = (currentFile || "chart").replace(/\.[^.]+$/, "") + ".svg";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  $("renderState").textContent = "SVG 已导出";
+});
+
+/* =====================================================================
+ * 导出 PDF（通过系统打印对话框，可选择"另存为 PDF"）
+ * ===================================================================== */
+$("btnExportPdf").addEventListener("click", () => {
+  if (!previewContainer.querySelector("svg")) { alert("预览区为空，无法导出"); return; }
+  // 打印前先确保预览已渲染为当前内容
+  renderPreview().then(() => {
+    // 临时保持当前缩放，打印样式 @media print 会自动适配页面宽度
+    window.print();
+  });
+});
+
+/* =====================================================================
+ * 复制到剪贴板（Markdown / SVG）
+ * ===================================================================== */
+async function copyText(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // 非 secure context / 剪贴板 API 不可用时的兜底方案
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand("copy");
+    } catch (e2) {
+      document.body.removeChild(ta);
+      alert("复制失败，请手动复制");
+      return;
+    }
+    document.body.removeChild(ta);
+  }
+  $("renderState").textContent = label + " 已复制";
+}
+
+$("btnCopyMd").addEventListener("click", () => {
+  const code = editor.value;
+  if (!code.trim()) { alert("编辑器为空，无法复制"); return; }
+  copyText("```mermaid\n" + code.replace(/\n+$/, "") + "\n```", "Markdown");
+});
+
+$("btnCopySvg").addEventListener("click", () => {
+  const svgStr = getSvgString();
+  if (!svgStr) { alert("预览区为空，无法复制"); return; }
+  copyText(svgStr, "SVG");
+});
+
+$("btnExportPng").addEventListener("click", () => {
+  const svgStr = getSvgString();
+  if (!svgStr) { alert("预览区为空，无法导出"); return; }
+  const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const scale = 2; // 2x 超采样保证清晰
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width * scale;
+    canvas.height = img.height * scale;
+    const ctx = canvas.getContext("2d");
+    const bgOpt = $("pngBgSelect").value;
+    let bgColor = null;
+    if (bgOpt === "theme") bgColor = previewBg();
+    else if (bgOpt === "white") bgColor = "#ffffff";
+    if (bgColor) { ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((pngBlob) => {
+      const pngUrl = URL.createObjectURL(pngBlob);
+      const a = document.createElement("a");
+      a.href = pngUrl;
+      a.download = (currentFile || "chart").replace(/\.[^.]+$/, "") + ".png";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(pngUrl);
+      $("renderState").textContent = "PNG 已导出";
+    }, "image/png");
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = () => { alert("PNG 导出失败"); URL.revokeObjectURL(url); };
+  img.src = url;
+});
+
+/* =====================================================================
+ * 缩放
+ * ===================================================================== */
+$("btnZoomIn").addEventListener("click", () => { zoom = Math.min(4, +(zoom * 1.2).toFixed(3)); syncZoomBtn(); applyZoom(); });
+$("btnZoomOut").addEventListener("click", () => { zoom = Math.max(0.2, +(zoom / 1.2).toFixed(3)); syncZoomBtn(); applyZoom(); });
+$("btnZoomReset").addEventListener("click", () => { zoom = 1; syncZoomBtn(); applyZoom(); });
+function syncZoomBtn() { $("btnZoomReset").textContent = Math.round(zoom * 100) + "%"; }
+
+/* =====================================================================
+ * 模板选择
+ * ===================================================================== */
+const templateSelect = $("templateSelect");
+refreshTemplateSelect();
+templateSelect.addEventListener("focus", () => { prevTemplateValue = templateSelect.value; });
+templateSelect.addEventListener("change", () => {
+  applyTemplate(parseInt(templateSelect.value, 10));
+});
+
+/* =====================================================================
+ * 模板管理弹窗
+ * ===================================================================== */
+const tmplModal = $("templateModal");
+const tmplChips = $("tmplChips");
+const tmplName = $("tmplName");
+const tmplCode = $("tmplCode");
+let activeTmplIdx = 0;
+
+function renderTmplChips() {
+  tmplChips.innerHTML = "";
+  templates.forEach((t, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "chip" + (idx === activeTmplIdx ? " active" : "");
+    const label = document.createElement("span");
+    label.textContent = t.name;
+    label.addEventListener("click", () => selectTmpl(idx));
+    const del = document.createElement("span");
+    del.className = "del";
+    del.textContent = "×";
+    del.title = "删除该模板";
+    del.addEventListener("click", (e) => { e.stopPropagation(); deleteTmpl(idx); });
+    chip.appendChild(label);
+    chip.appendChild(del);
+    tmplChips.appendChild(chip);
+  });
+  if (templates[activeTmplIdx]) {
+    tmplName.value = templates[activeTmplIdx].name;
+    tmplCode.value = templates[activeTmplIdx].code;
+  } else {
+    tmplName.value = "";
+    tmplCode.value = "";
+  }
+}
+function selectTmpl(idx) {
+  activeTmplIdx = idx;
+  renderTmplChips();
+}
+function addTmpl() {
+  templates.push({ name: "新模板" + (templates.length + 1), code: "graph TD\n    A --> B" });
+  activeTmplIdx = templates.length - 1;
+  saveTemplates();
+  renderTmplChips();
+  refreshTemplateSelect(true);
+}
+function deleteTmpl(idx) {
+  if (!confirm("确定删除模板「" + templates[idx].name + "」吗？")) return;
+  templates.splice(idx, 1);
+  if (!templates.length) {
+    // 不允许为空，重新填默认
+    templates = loadTemplates();
+  }
+  activeTmplIdx = Math.min(activeTmplIdx, templates.length - 1);
+  saveTemplates();
+  renderTmplChips();
+  refreshTemplateSelect(true);
+}
+$("tmplNew").addEventListener("click", addTmpl);
+$("tmplSave").addEventListener("click", () => {
+  const name = tmplName.value.trim();
+  const code = tmplCode.value;
+  if (!name) { alert("模板名称不能为空"); return; }
+  if (!code.trim()) { alert("模板代码不能为空"); return; }
+  if (templates[activeTmplIdx]) {
+    templates[activeTmplIdx].name = name;
+    templates[activeTmplIdx].code = code;
+  } else {
+    templates.push({ name, code });
+    activeTmplIdx = templates.length - 1;
+  }
+  saveTemplates();
+  renderTmplChips();
+  refreshTemplateSelect(true);
+  $("renderState").textContent = "模板已保存";
+});
+$("tmplDelete").addEventListener("click", () => deleteTmpl(activeTmplIdx));
+$("tmplClose").addEventListener("click", () => tmplModal.classList.add("hidden"));
+tmplModal.addEventListener("click", (e) => { if (e.target === tmplModal) tmplModal.classList.add("hidden"); });
+$("btnManageTemplates").addEventListener("click", () => {
+  renderTmplChips();
+  tmplModal.classList.remove("hidden");
+});
+$("tmplExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(templates, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "mermaid_templates.json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  $("renderState").textContent = "模板已导出";
+});
+$("tmplImport").addEventListener("click", () => { $("tmplImportFile").value = ""; $("tmplImportFile").click(); });
+$("tmplImportFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const arr = JSON.parse(await file.text());
+    if (!Array.isArray(arr) || !arr.every(t => t && typeof t.name === "string" && typeof t.code === "string")) {
+      throw new Error("格式不正确");
+    }
+    templates = arr;
+    saveTemplates();
+    activeTmplIdx = 0;
+    renderTmplChips();
+    refreshTemplateSelect(true);
+    $("renderState").textContent = "已导入 " + arr.length + " 个模板";
+  } catch (err) {
+    alert("导入失败：" + err.message);
+  }
+});
+
+/* =====================================================================
+ * 主题切换
+ * ===================================================================== */
+$("themeSelect").addEventListener("change", renderPreview);
+
+/* =====================================================================
+ * 编辑器事件
+ * ===================================================================== */
+editor.addEventListener("beforeinput", () => history.beforeEdit());
+editor.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    history.beforeEdit(); // setRangeText 不触发 beforeinput，手动记录
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.setRangeText("    ", start, end, "end");
+    return;
+  }
+  if (e.key === "s" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveFile(); return; }
+  if (e.key === "o" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnOpen").click(); return; }
+  if (e.key === "n" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnNew").click(); return; }
+  if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); history.undo(); return; }
+  if ((e.key === "y" || (e.key === "z" && e.shiftKey)) && (e.ctrlKey || e.metaKey)) { e.preventDefault(); history.redo(); return; }
+});
+editor.addEventListener("input", () => {
+  history.afterEdit();
+  updateStats();
+  highlightEditor();
+  scheduleDraft();
+  debouncedPreview();
+  setDirtyState();
+});
+
+btnUndo.addEventListener("click", () => history.undo());
+btnRedo.addEventListener("click", () => history.redo());
+
+/* =====================================================================
+ * 语法高亮刷新（与滚动同步）
+ * ===================================================================== */
+let hlRaf = 0;
+function highlightEditor() {
+  if (hlRaf) return;
+  hlRaf = requestAnimationFrame(() => {
+    hlRaf = 0;
+    highlightEl.innerHTML = highlight(editor.value, lastErrorLine) || " ";
+    syncEditorScroll();
+  });
+}
+function syncEditorScroll() {
+  highlightEl.parentElement.scrollTop = editor.scrollTop;
+  highlightEl.parentElement.scrollLeft = editor.scrollLeft;
+}
+editor.addEventListener("scroll", syncEditorScroll);
+
+/* =====================================================================
+ * 分栏拖拽
+ * ===================================================================== */
+const divider = $("divider");
+const editorPane = $("editorPane");
+let dragging = false;
+divider.addEventListener("mousedown", (e) => {
+  dragging = true;
+  divider.classList.add("active");
+  e.preventDefault();
+});
+document.addEventListener("mousemove", (e) => {
+  if (!dragging) return;
+  const rect = $("main").getBoundingClientRect();
+  const ratio = (e.clientX - rect.left) / rect.width;
+  const pct = Math.max(15, Math.min(85, ratio * 100));
+  editorPane.style.flex = "1 1 " + pct + "%";
+  $("previewPane").style.flex = "1 1 " + (100 - pct) + "%";
+});
+document.addEventListener("mouseup", () => {
+  dragging = false;
+  divider.classList.remove("active");
+});
+
+/* =====================================================================
+ * 关闭/刷新未保存确认
+ * ===================================================================== */
+window.addEventListener("beforeunload", (e) => {
+  if (isDirty()) {
+    e.preventDefault();
+    e.returnValue = ""; // 触发浏览器原生提示
+  }
+});
+
+
+/* =====================================================================
+ * 初始化
+ * ===================================================================== */
+(function init() {
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch (e) { draft = null; }
+  if (draft && typeof draft.text === "string" && draft.text.trim()) {
+    // 恢复上次未保存草稿（视为脏状态，由用户决定保存或新建）
+    editor.value = draft.text;
+    currentFile = draft.file || null;
+    currentContent = "";
+    history.reset();
+    $("renderState").textContent = "已恢复上次未保存内容";
+  } else {
+    editor.value = templates[0].code;
+    markSaved();
+  }
+  updateStats();
+  highlightEditor();
+  history.reset();
+  syncZoomBtn();
+  renderPreview();
+})();
+</script>
+</body>
+</html>
