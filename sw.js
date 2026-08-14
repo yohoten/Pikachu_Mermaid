@@ -1,10 +1,12 @@
 /* Pikachu Mermaid — Service Worker（离线缓存） */
-const CACHE_NAME = "pikachu-mermaid-v1";
+const CACHE_NAME = "pikachu-mermaid-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./mermaid.min.js",
   "./Pikachu_Mermaid.ico",
+  "./icon-192x192.png",
+  "./icon-512x512.png",
   "./manifest.webmanifest"
 ];
 

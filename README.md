@@ -1,6 +1,8 @@
 # Pikachu Mermaid
 
-零依赖的 Mermaid 图表编辑器 —— **纯 Web 单文件方案**，双击即可运行，无需 Python / PyQt / 任何安装。
+零依赖的 Mermaid 图表编辑器 —— **纯 Web 单文件方案**，浏览器打开即可用，无需 Python / PyQt / 任何安装，支持 PWA 安装为桌面应用并离线使用。
+
+![](https://i.imgs.ovh/2026/08/15/19799f6e94b57f266af71b8b6c2a4b23.jpg)
 
 ## ✨ 特性
 
@@ -26,12 +28,25 @@
 
 ## 🚀 使用方法
 
-```
-方式一：直接双击 index.html（推荐，file:// 协议即可运行）
-方式二：或起本地服务后访问
-        python -m http.server 8000
-        浏览器打开 http://localhost:8000
-```
+**在线使用（推荐）**
+
+打开 👉 **https://yohoten.github.io/Pikachu_Mermaid/** （GitHub Pages 托管，无需安装任何东西，打开即用）
+
+**本地方式（任选其一）**
+
+| 方式 | 操作 | 说明 |
+|------|------|------|
+| 直接打开 | 双击 `index.html` | file:// 协议即可运行，无需服务器；PWA 安装不可用 |
+| 本地服务 | `python -m http.server 8000` → 访问 `http://localhost:8000` | 可启用 PWA 安装与离线功能 |
+
+**PWA 安装为应用（桌面化，可选）**
+
+通过在线地址或本地服务访问后（须为 http/https，不能是 file://）：
+
+1. Chrome / Edge 打开后，地址栏右侧会出现 **安装图标**（显示器+箭头），点击。（**关闭浏览器后执行该步骤，保证无其他标签页**）
+2. 或点右上角 **⋮ 菜单 → 安装 Pikachu Mermaid**
+3. 确认后即以**独立窗口**运行，桌面/开始菜单生成快捷方式
+4. 安装后**完全离线可用**（Service Worker 已缓存全部资源），不再需要服务器，每次打开不再重复下载
 
 **快捷键**
 
@@ -45,12 +60,35 @@
 | `Ctrl+滚轮` | 缩放预览 |
 | `Tab` | 缩进（插入 4 空格） |
 
+## 🚀 部署到 GitHub Pages（在线访问）
+
+本项目已托管于 **https://yohoten.github.io/Pikachu_Mermaid/**。若需更新线上版本：
+
+```
+1. git init && git add . && git commit -m "update"
+2. 关联远程仓库：
+   git remote add origin https://github.com/yohoten/Pikachu_Mermaid.git
+   git branch -M main
+   git push -u origin main
+3. GitHub → 仓库 Settings → Pages
+   - Source 选 "Deploy from a branch"
+   - Branch 选 main / (root)
+   - 保存后等待 1-2 分钟，即可访问 https://yohoten.github.io/Pikachu_Mermaid/
+```
+
+**PWA 在 GitHub Pages 的说明**
+- GitHub Pages 提供 https，因此 Service Worker 可正常注册，**安装为应用 + 离线功能完全可用**
+- manifest 与 sw.js 均使用相对路径，在 `/Pikachu_Mermaid/` 子路径下正常工作
+- 更新代码后若线上仍显示旧版：浏览器 `Ctrl+F5` 强刷，或应用内会随 SW 更新自动刷新
+
 ## 📁 项目结构
 ```
 Pikachu_Mermaid/
 ├── index.html             # 单文件应用（UI + 逻辑 + 模板全部内嵌）
 ├── mermaid.min.js         # 本地 mermaid v11（离线可用，支持全部图表）
 ├── Pikachu_Mermaid.ico    # 应用图标（浏览器标签页 / 快捷键 / PWA）
+├── icon-192x192.png       # PWA 图标（192px，安装必需）
+├── icon-512x512.png       # PWA 图标（512px，安装必需）
 ├── manifest.webmanifest   # PWA 清单（安装为应用 / 离线）
 ├── sw.js                  # Service Worker（离线缓存）
 ├── test/
