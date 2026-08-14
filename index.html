@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#27273a">
 <title>Pikachu Mermaid — 图表编辑器</title>
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/x-icon" href="Pikachu_Mermaid.ico">
 <link rel="shortcut icon" type="image/x-icon" href="Pikachu_Mermaid.ico">
 <link rel="apple-touch-icon" href="Pikachu_Mermaid.ico">
@@ -47,6 +48,13 @@
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
     flex-shrink: 0;
+    max-height: 76px;
+    overflow-y: auto;
+  }
+  /* 窄窗口：工具栏按钮分组收紧 */
+  @media (max-width: 900px) {
+    #toolbar .sep { display: none; }
+    #toolbar { max-height: 52px; }
   }
   #toolbar button {
     background: var(--panel2);
@@ -227,6 +235,67 @@
     max-width: 100%;
   }
 
+  /* ── 多文件标签栏 ── */
+  #tabBar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px;
+    background: var(--panel2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  #tabBar::-webkit-scrollbar { height: 6px; }
+  #tabList { display: flex; gap: 4px; flex: 1; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+  .tab.active { background: #3c3c58; border-color: var(--accent); color: var(--text); }
+  .tab .tname { overflow: hidden; text-overflow: ellipsis; }
+  .tab .tclose { color: var(--muted); }
+  .tab .tclose:hover { color: var(--danger); }
+  #btnNewTab {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 5px;
+    width: 26px; height: 26px; cursor: pointer; font-size: 14px;
+  }
+  #btnNewTab:hover { border-color: var(--accent); }
+
+  /* ── 大纲面板 ── */
+  #outlinePanel {
+    position: sticky; top: 0;
+    background: #f7f7f9;
+    border: 1px solid #e0e0e6;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .outline-title { font-weight: 600; color: #444; margin-bottom: 6px; }
+  #outlineList { display: flex; flex-direction: column; gap: 2px; }
+  .outline-item {
+    color: #555; cursor: pointer; padding: 2px 4px; border-radius: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .outline-item:hover { background: #ececf2; color: #222; }
+  .outline-item.indent-1 { padding-left: 16px; }
+  .outline-item.indent-2 { padding-left: 28px; }
+  .outline-item .oline { color: #999; margin-right: 4px; }
+
+  /* ── 全屏预览 ── */
+  body.fullscreen #toolbar, body.fullscreen #tabBar, body.fullscreen #statusbar,
+  body.fullscreen #editorPane, body.fullscreen #divider { display: none !important; }
+  body.fullscreen #main { display: block !important; }
+  body.fullscreen #previewPane { width: 100% !important; flex: none !important; }
+
   /* ── 打印 / 导出 PDF ── */
   @media print {
     body { background: #ffffff !important; overflow: visible !important; }
@@ -286,6 +355,15 @@
     <span class="sep"></span>
     <button id="btnCopyMd" title="复制 Mermaid 代码块（Markdown）">复制 Markdown</button>
     <button id="btnCopySvg" title="复制 SVG 源码">复制 SVG</button>
+    <button id="btnExportMd" title="导出 Markdown 文件（含 Mermaid 代码块）">导出 Markdown</button>
+    <span class="sep"></span>
+    <button id="btnFullscreen" title="全屏预览 (Ctrl+Enter)">全屏</button>
+  </div>
+
+  <!-- 多文件标签栏 -->
+  <div id="tabBar">
+    <div id="tabList"></div>
+    <button id="btnNewTab" title="新建标签页">+</button>
   </div>
 
   <div id="main">
@@ -310,13 +388,17 @@
         <span id="chartTypeTag">未检测</span>
       </div>
       <div id="previewScroll">
+        <div id="outlinePanel" hidden>
+          <div class="outline-title">大纲</div>
+          <div id="outlineList"></div>
+        </div>
         <div id="previewContainer"></div>
       </div>
     </div>
   </div>
 
   <div id="statusbar">
-    <span>Pikachu Mermaid · 纯 Web 零依赖版</span>
+    <span>Pikachu Mermaid</span>
     <span id="renderState">就绪</span>
     <span class="right" id="fileName">未命名.mmd</span>
   </div>
@@ -356,15 +438,15 @@
  * 模板（从原 templates/templates.json 迁移，内嵌避免 file:// 下 fetch 受限）
  * ===================================================================== */
 const DEFAULT_TEMPLATES = [
-  { name: "流程图",       code: "graph TD\n    A[开始] --> B{判断条件A?}\n    B -->|是| C[执行操作1]\n    B -->|否| D[执行操作2]\n    C --> E[处理结果]\n    D --> E\n    E --> F[结束]\n" },
-  { name: "序列图",       code: "sequenceDiagram\n    participant A as 客户端\n    participant B as 服务器\n    participant C as 数据库\n    A->>B: 发送请求\n    B->>C: 查询数据\n    C-->>B: 返回结果\n    B-->>A: 响应数据\n" },
-  { name: "甘特图",       code: "gantt\n    title 项目开发计划\n    dateFormat  YYYY-MM-DD\n    section 需求分析\n    需求调研     :a1, 2024-01-01, 7d\n    需求评审     :a2, after a1, 3d\n    section 开发\n    前端开发     :b1, after a2, 14d\n    后端开发     :b2, after a2, 14d\n    section 测试\n    集成测试     :c1, after b1, 7d\n    发布上线     :c2, after c1, 2d\n" },
-  { name: "类图",         code: "classDiagram\n    class Animal {\n        +string name\n        +int age\n        +makeSound()\n    }\n    class Dog {\n        +string breed\n        +bark()\n    }\n    class Cat {\n        +string color\n        +meow()\n    }\n    Animal <|-- Dog\n    Animal <|-- Cat\n" },
-  { name: "状态图",       code: "stateDiagram-v2\n    [*] --> 空闲\n    空闲 --> 处理中: 收到请求\n    处理中 --> 完成: 处理成功\n    处理中 --> 错误: 处理失败\n    错误 --> 处理中: 重试\n    完成 --> [*]\n" },
-  { name: "饼图",         code: "pie\n    title 市场份额分布\n    \"产品A\": 40\n    \"产品B\": 30\n    \"产品C\": 20\n    \"其他\": 10\n" },
-  { name: "思维导图",     code: "mindmap\n  root((项目规划))\n    需求\n      用户调研\n      竞品分析\n    设计\n      UI设计\n      架构设计\n    开发\n      前端\n      后端\n    测试\n      单元测试\n      集成测试\n" },
-  { name: "象限图",       code: "quadrantChart\n    title 产品优先级分析\n    x-axis \"低价值\" --> \"高价值\"\n    y-axis \"低复杂度\" --> \"高复杂度\"\n    quadrant-1 \"优先开发\"\n    quadrant-2 \"评估后开发\"\n    quadrant-3 \"暂缓\"\n    quadrant-4 \"不开发\"\n    \"功能A\": [0.8, 0.3]\n    \"功能B\": [0.6, 0.7]\n    \"功能C\": [0.3, 0.4]\n" },
-  { name: "雷达图",       code: "radar-beta\n    axis 性能, 可维护性, 用户体验,\n         安全性, 扩展性\n    curve 系统A: 4, 3, 5, 4, 3\n    curve 系统B: 3, 5, 3, 5, 4\n    max: 5\n    min: 0\n" },
+  { name: "流程图",       type: "流程图",       code: "graph TD\n    A[开始] --> B{判断条件A?}\n    B -->|是| C[执行操作1]\n    B -->|否| D[执行操作2]\n    C --> E[处理结果]\n    D --> E\n    E --> F[结束]\n" },
+  { name: "序列图",       type: "序列图",       code: "sequenceDiagram\n    participant A as 客户端\n    participant B as 服务器\n    participant C as 数据库\n    A->>B: 发送请求\n    B->>C: 查询数据\n    C-->>B: 返回结果\n    B-->>A: 响应数据\n" },
+  { name: "甘特图",       type: "甘特图",       code: "gantt\n    title 项目开发计划\n    dateFormat  YYYY-MM-DD\n    section 需求分析\n    需求调研     :a1, 2024-01-01, 7d\n    需求评审     :a2, after a1, 3d\n    section 开发\n    前端开发     :b1, after a2, 14d\n    后端开发     :b2, after a2, 14d\n    section 测试\n    集成测试     :c1, after b1, 7d\n    发布上线     :c2, after c1, 2d\n" },
+  { name: "类图",         type: "类图",         code: "classDiagram\n    class Animal {\n        +string name\n        +int age\n        +makeSound()\n    }\n    class Dog {\n        +string breed\n        +bark()\n    }\n    class Cat {\n        +string color\n        +meow()\n    }\n    Animal <|-- Dog\n    Animal <|-- Cat\n" },
+  { name: "状态图",       type: "状态图",       code: "stateDiagram-v2\n    [*] --> 空闲\n    空闲 --> 处理中: 收到请求\n    处理中 --> 完成: 处理成功\n    处理中 --> 错误: 处理失败\n    错误 --> 处理中: 重试\n    完成 --> [*]\n" },
+  { name: "饼图",         type: "饼图",         code: "pie\n    title 市场份额分布\n    \"产品A\": 40\n    \"产品B\": 30\n    \"产品C\": 20\n    \"其他\": 10\n" },
+  { name: "思维导图",     type: "思维导图",     code: "mindmap\n  root((项目规划))\n    需求\n      用户调研\n      竞品分析\n    设计\n      UI设计\n      架构设计\n    开发\n      前端\n      后端\n    测试\n      单元测试\n      集成测试\n" },
+  { name: "象限图",       type: "象限图",       code: "quadrantChart\n    title 产品优先级分析\n    x-axis \"低价值\" --> \"高价值\"\n    y-axis \"低复杂度\" --> \"高复杂度\"\n    quadrant-1 \"优先开发\"\n    quadrant-2 \"评估后开发\"\n    quadrant-3 \"暂缓\"\n    quadrant-4 \"不开发\"\n    \"功能A\": [0.8, 0.3]\n    \"功能B\": [0.6, 0.7]\n    \"功能C\": [0.3, 0.4]\n" },
+  { name: "雷达图",       type: "雷达图",       code: "radar-beta\n    axis 性能, 可维护性, 用户体验,\n         安全性, 扩展性\n    curve 系统A: 4, 3, 5, 4, 3\n    curve 系统B: 3, 5, 3, 5, 4\n    max: 5\n    min: 0\n" },
 ];
 
 /* =====================================================================
@@ -379,7 +461,8 @@ function loadTemplates() {
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr) && arr.length && arr.every(t => t && typeof t.name === "string" && typeof t.code === "string")) {
-        return arr;
+        // 兼容旧数据：补齐 type 字段（默认按名称）
+        return arr.map(t => ({ type: t.type || t.name || "自定义", ...t }));
       }
     }
   } catch (e) { /* 解析失败回退默认 */ }
@@ -394,11 +477,23 @@ function saveTemplates() {
 function refreshTemplateSelect(keepValue) {
   const prev = keepValue ? templateSelect.value : null;
   templateSelect.innerHTML = "";
+  // 按类型分组（optgroup）
+  const groups = {};
   templates.forEach((t, idx) => {
-    const opt = document.createElement("option");
-    opt.value = idx;
-    opt.textContent = t.name;
-    templateSelect.appendChild(opt);
+    const g = t.type || "自定义";
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(idx);
+  });
+  Object.keys(groups).forEach((g) => {
+    const grp = document.createElement("optgroup");
+    grp.label = g;
+    groups[g].forEach((idx) => {
+      const opt = document.createElement("option");
+      opt.value = idx;
+      opt.textContent = templates[idx].name;
+      grp.appendChild(opt);
+    });
+    templateSelect.appendChild(grp);
   });
   if (prev !== null && templates[prev]) templateSelect.value = prev;
 }
@@ -411,6 +506,8 @@ function applyTemplate(idx) {
   history.reset();
   markSaved();
   clearDraft();
+  const doc = getActiveDoc();
+  if (doc) { doc.text = editor.value; doc.savedText = editor.value; }
   updateStats();
   highlightEditor();
   renderPreview();
@@ -611,6 +708,21 @@ class HistoryManager {
   }
   get canUndo() { return this.stack.length > 0; }
   get canRedo() { return this.redoStack.length > 0; }
+  // 导出当前历史状态（用于多标签切换时保存）
+  saveState() {
+    return {
+      stack: this.stack.map(x => ({ ...x })),
+      redoStack: this.redoStack.map(x => ({ ...x })),
+      pendingBefore: this.pendingBefore ? { ...this.pendingBefore } : null,
+    };
+  }
+  // 恢复历史状态（用于多标签切换时载入）
+  restoreState(state) {
+    this.stack = (state && state.stack) ? state.stack.map(x => ({ ...x })) : [];
+    this.redoStack = (state && state.redoStack) ? state.redoStack.map(x => ({ ...x })) : [];
+    this.pendingBefore = (state && state.pendingBefore) ? { ...state.pendingBefore } : null;
+    this.syncButtons();
+  }
 }
 
 /* =====================================================================
@@ -640,6 +752,123 @@ const history = new HistoryManager(
   () => [editor.selectionStart, editor.selectionEnd],
   (s, e) => { editor.setSelectionRange(s, e); }
 );
+
+/* =====================================================================
+ * 多文件标签页（多文档状态管理）
+ * ===================================================================== */
+let docs = [];              // 文档列表：{ id, name, file, text, savedText, historyState }
+let activeDocId = null;     // 当前文档 id
+let docSeq = 0;             // 文档 id 自增
+
+function getActiveDoc() { return docs.find(d => d.id === activeDocId) || null; }
+
+function createDoc(text, file, name) {
+  const id = ++docSeq;
+  const doc = {
+    id,
+    name: name || file || ("未命名" + (docs.length + 1) + ".mmd"),
+    file: file || null,
+    text: text || "",
+    savedText: text || "",
+    historyState: null,
+  };
+  docs.push(doc);
+  return doc;
+}
+
+// 把当前编辑器状态存入活动文档
+function snapshotActiveDoc() {
+  const doc = getActiveDoc();
+  if (!doc) return;
+  doc.text = editor.value;
+  doc.historyState = history.saveState();
+  doc.savedText = currentContent;
+  doc.file = currentFile;
+}
+
+// 切换/加载指定文档到编辑器
+function loadDoc(doc) {
+  snapshotActiveDoc();
+  activeDocId = doc.id;
+  editor.value = doc.text || "";
+  history.restoreState(doc.historyState);
+  currentFile = doc.file;
+  currentContent = doc.savedText !== undefined ? doc.savedText : (doc.text || "");
+  updateStats();
+  highlightEditor();
+  setDirtyState();
+  renderPreview();
+  refreshTabs();
+}
+
+function refreshTabs() {
+  const tabList = $("tabList");
+  tabList.innerHTML = "";
+  docs.forEach(doc => {
+    const tab = document.createElement("span");
+    tab.className = "tab" + (doc.id === activeDocId ? " active" : "");
+    const name = document.createElement("span");
+    name.className = "tname";
+    name.textContent = doc.name;
+    tab.appendChild(name);
+    const close = document.createElement("span");
+    close.className = "tclose";
+    close.textContent = "×";
+    close.title = "关闭";
+    close.addEventListener("click", (e) => { e.stopPropagation(); closeDoc(doc.id); });
+    tab.appendChild(close);
+    tab.addEventListener("click", () => loadDoc(doc));
+    tabList.appendChild(tab);
+  });
+}
+
+function closeDoc(id) {
+  const doc = docs.find(d => d.id === id);
+  if (!doc) return;
+  if (id === activeDocId && isDirty() && !confirm("「" + doc.name + "」未保存，确定关闭吗？")) return;
+  docs = docs.filter(d => d.id !== id);
+  if (docs.length === 0) {
+    const d = createDoc(templates[0].code, null, "未命名1.mmd");
+    activeDocId = d.id;
+    loadDoc(d);
+    markSaved();
+    return;
+  }
+  if (id === activeDocId) {
+    const next = docs[docs.length - 1];
+    loadDoc(next);
+  } else {
+    refreshTabs();
+  }
+}
+
+function newDoc() {
+  const existing = getActiveDoc();
+  if (existing) snapshotActiveDoc();
+  const d = createDoc(templates[0].code, null, "未命名" + (docs.length + 1) + ".mmd");
+  activeDocId = d.id;
+  editor.value = d.text;
+  history.reset();
+  currentFile = null;
+  currentContent = d.text;
+  markSaved();
+  clearDraft();
+  updateStats();
+  highlightEditor();
+  renderPreview();
+  refreshTabs();
+}
+
+$("btnNewTab").addEventListener("click", newDoc);
+
+// 供打开文件/init 调用：在新标签页打开文档
+window.__openDocInTab = function(file, text) {
+  const d = createDoc(text, file);
+  loadDoc(d);
+  markSaved();
+  clearDraft();
+  return d;
+};
 
 /* =====================================================================
  * 渲染预览
@@ -679,7 +908,14 @@ function scheduleDraft() {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(() => {
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ text: editor.value, file: currentFile || null, at: Date.now() }));
+      // 保存全部文档（含未保存文本、文件名、历史），保证多标签可整体恢复
+      const snap = docs.map(d => ({
+        name: d.name, file: d.file,
+        text: d.id === activeDocId ? editor.value : d.text,
+        savedText: d.savedText,
+        historyState: d.id === activeDocId ? history.saveState() : d.historyState,
+      }));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ docs: snap, at: Date.now() }));
     } catch (e) { /* 隐私模式 / 容量满时静默 */ }
   }, 500);
 }
@@ -725,6 +961,7 @@ async function renderPreview() {
       lastErrorLine = null;
       highlightEditor();
     }
+    renderOutline(code);
   } catch (err) {
     showRenderError(err);
     $("renderState").textContent = "渲染失败";
@@ -732,7 +969,6 @@ async function renderPreview() {
     isRendering = false;
   }
 }
-
 function applyZoom() {
   const svg = previewContainer.querySelector("svg");
   if (!svg) return;
@@ -741,6 +977,55 @@ function applyZoom() {
     svg.style.width = (vb.width * zoom) + "px";
     svg.style.height = (vb.height * zoom) + "px";
   }
+}
+
+/* =====================================================================
+ * 大纲导航（subgraph / section 目录，点击跳转代码行）
+ * ===================================================================== */
+function renderOutline(code) {
+  const outlinePanel = $("outlinePanel");
+  const outlineList = $("outlineList");
+  const items = [];
+  const lines = code.split("\n");
+  // 识别结构：subgraph(层级)、section(甘特)、participant(序列) 等
+  const reSub = /^\s*(subgraph)\s+([^\[]*?)(?:\[([^\]]*)\])?\s*$/;
+  const reSection = /^\s*(section)\s+(.+)$/;
+  const reParticipant = /^\s*(participant|actor)\s+([^\s:]+)(?:\s+as\s+(.+))?$/;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let m;
+    if ((m = line.match(reSub))) {
+      const title = (m[3] || m[2] || "").trim();
+      const indent = (line.match(/^\s*/)[0].length) / 2;
+      items.push({ indent: Math.floor(indent), text: title || "(subgraph)", line: i + 1, kind: "sub" });
+    } else if ((m = line.match(reSection))) {
+      items.push({ indent: 0, text: m[2].trim(), line: i + 1, kind: "sec" });
+    } else if ((m = line.match(reParticipant))) {
+      const name = (m[3] || m[2] || "").trim();
+      items.push({ indent: 0, text: name, line: i + 1, kind: "part" });
+    }
+  }
+  if (items.length === 0) {
+    outlinePanel.hidden = true;
+    outlineList.innerHTML = "";
+    return;
+  }
+  outlinePanel.hidden = false;
+  outlineList.innerHTML = "";
+  items.forEach((it) => {
+    const div = document.createElement("div");
+    div.className = "outline-item indent-" + Math.min(2, it.indent);
+    const tag = document.createElement("span");
+    tag.className = "oline";
+    tag.textContent = it.kind === "sub" ? "▸" : it.kind === "sec" ? "#" : "◈";
+    const label = document.createElement("span");
+    label.textContent = it.text;
+    div.appendChild(tag);
+    div.appendChild(label);
+    div.title = "跳转到第 " + it.line + " 行";
+    div.addEventListener("click", () => jumpToLine(it.line));
+    outlineList.appendChild(div);
+  });
 }
 
 /* =====================================================================
@@ -772,18 +1057,11 @@ function markSaved() {
  * 文件操作（File API + Blob 下载，支持 GBK 兼容）
  * ===================================================================== */
 $("btnNew").addEventListener("click", () => {
-  if (isDirty() && !confirm("当前内容未保存，确定新建吗？")) return;
-  editor.value = templates[0].code;
-  currentFile = null;
-  history.reset();
-  markSaved();
-  clearDraft();
-  updateStats();
-  highlightEditor();
-  renderPreview();
+  // 多标签：新建一个标签页（不再覆盖当前）
+  if (getActiveDoc() && isDirty() && !confirm("当前标签未保存，确定新建标签吗？")) return;
+  newDoc();
 });
 $("btnOpen").addEventListener("click", () => {
-  if (isDirty() && !confirm("当前内容未保存，确定打开其他文件吗？")) return;
   $("fileInput").value = "";
   $("fileInput").click();
 });
@@ -797,14 +1075,8 @@ $("fileInput").addEventListener("change", async (e) => {
     if (text.indexOf("\uFFFD") !== -1) {
       text = new TextDecoder("gbk").decode(buf);
     }
-    editor.value = text;
-    currentFile = file.name;
-    history.reset();
-    markSaved();
-    clearDraft();
-    updateStats();
-    highlightEditor();
-    renderPreview();
+    // 打开文件 → 新标签页
+    window.__openDocInTab(file.name, text);
     $("renderState").textContent = "已打开：" + file.name;
   } catch (err) {
     alert("打开文件失败：" + err);
@@ -825,6 +1097,8 @@ function saveFile() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   currentFile = name;
+  const doc = getActiveDoc();
+  if (doc) { doc.name = name; doc.file = name; doc.savedText = editor.value; refreshTabs(); }
   markSaved();
   clearDraft();
   $("renderState").textContent = "已保存：" + name;
@@ -866,6 +1140,7 @@ $("btnExportSvg").addEventListener("click", () => {
  * ===================================================================== */
 $("btnExportPdf").addEventListener("click", () => {
   if (!previewContainer.querySelector("svg")) { alert("预览区为空，无法导出"); return; }
+  if (!confirm("将打开系统打印对话框，请选择目标为「另存为 PDF」。打印内容仅包含图表预览区。\n\n继续？")) return;
   // 打印前先确保预览已渲染为当前内容
   renderPreview().then(() => {
     // 临时保持当前缩放，打印样式 @media print 会自动适配页面宽度
@@ -911,6 +1186,21 @@ $("btnCopySvg").addEventListener("click", () => {
   copyText(svgStr, "SVG");
 });
 
+$("btnExportMd").addEventListener("click", () => {
+  const code = editor.value;
+  if (!code.trim()) { alert("编辑器为空，无法导出"); return; }
+  const baseName = (currentFile || "chart").replace(/\.[^.]+$/, "") || "chart";
+  const md = "# " + baseName + "\n\n```mermaid\n" + code.replace(/\n+$/, "") + "\n```\n";
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = baseName + ".md";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  $("renderState").textContent = "Markdown 已导出";
+});
+
 $("btnExportPng").addEventListener("click", () => {
   const svgStr = getSvgString();
   if (!svgStr) { alert("预览区为空，无法导出"); return; }
@@ -951,6 +1241,28 @@ $("btnZoomIn").addEventListener("click", () => { zoom = Math.min(4, +(zoom * 1.2
 $("btnZoomOut").addEventListener("click", () => { zoom = Math.max(0.2, +(zoom / 1.2).toFixed(3)); syncZoomBtn(); applyZoom(); });
 $("btnZoomReset").addEventListener("click", () => { zoom = 1; syncZoomBtn(); applyZoom(); });
 function syncZoomBtn() { $("btnZoomReset").textContent = Math.round(zoom * 100) + "%"; }
+function zoomBy(factor) {
+  zoom = Math.max(0.2, Math.min(4, +(zoom * factor).toFixed(3)));
+  syncZoomBtn();
+  applyZoom();
+}
+
+/* =====================================================================
+ * 全屏预览
+ * ===================================================================== */
+$("btnFullscreen").addEventListener("click", toggleFullscreen);
+function toggleFullscreen() {
+  const full = document.body.classList.toggle("fullscreen");
+  $("btnFullscreen").textContent = full ? "退出全屏" : "全屏";
+  $("btnFullscreen").title = full ? "退出全屏 (Ctrl+Enter)" : "全屏预览 (Ctrl+Enter)";
+  if (full) previewScroll.focus();
+}
+/* Ctrl+滚轮缩放（在预览区按住 Ctrl 滚动） */
+previewScroll.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  zoomBy(e.deltaY < 0 ? 1.1 : 0.9);
+}, { passive: false });
 
 /* =====================================================================
  * 模板选择
@@ -1001,7 +1313,7 @@ function selectTmpl(idx) {
   renderTmplChips();
 }
 function addTmpl() {
-  templates.push({ name: "新模板" + (templates.length + 1), code: "graph TD\n    A --> B" });
+  templates.push({ name: "新模板" + (templates.length + 1), type: "自定义", code: "graph TD\n    A --> B" });
   activeTmplIdx = templates.length - 1;
   saveTemplates();
   renderTmplChips();
@@ -1097,9 +1409,18 @@ editor.addEventListener("keydown", (e) => {
   if (e.key === "n" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnNew").click(); return; }
   if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); history.undo(); return; }
   if ((e.key === "y" || (e.key === "z" && e.shiftKey)) && (e.ctrlKey || e.metaKey)) { e.preventDefault(); history.redo(); return; }
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); toggleFullscreen(); return; }
 });
+/* Ctrl+滚轮缩放（编辑器内也可） */
+editor.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  zoomBy(e.deltaY < 0 ? 1.1 : 0.9);
+}, { passive: false });
 editor.addEventListener("input", () => {
   history.afterEdit();
+  const doc = getActiveDoc();
+  if (doc) doc.text = editor.value;
   updateStats();
   highlightEditor();
   scheduleDraft();
@@ -1162,29 +1483,53 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
-
 /* =====================================================================
  * 初始化
  * ===================================================================== */
 (function init() {
   let draft = null;
   try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch (e) { draft = null; }
-  if (draft && typeof draft.text === "string" && draft.text.trim()) {
-    // 恢复上次未保存草稿（视为脏状态，由用户决定保存或新建）
-    editor.value = draft.text;
-    currentFile = draft.file || null;
-    currentContent = "";
-    history.reset();
-    $("renderState").textContent = "已恢复上次未保存内容";
+
+  if (draft && Array.isArray(draft.docs) && draft.docs.length) {
+    // 多标签草稿恢复：重建所有文档，激活第一个
+    docs = draft.docs.map(d => ({
+      id: ++docSeq,
+      name: d.name || d.file || "未命名.mmd",
+      file: d.file || null,
+      text: d.text || "",
+      savedText: d.savedText !== undefined ? d.savedText : (d.text || ""),
+      historyState: d.historyState || null,
+    }));
+    const first = docs[0];
+    activeDocId = first.id;
+    editor.value = first.text || "";
+    history.restoreState(first.historyState);
+    currentFile = first.file;
+    currentContent = first.savedText;
+    refreshTabs();
+    $("renderState").textContent = "已恢复上次未保存内容（" + docs.length + " 个标签）";
   } else {
-    editor.value = templates[0].code;
+    // 无草稿 → 新建初始文档（默认模板）
+    const d = createDoc(templates[0].code, null, "未命名1.mmd");
+    activeDocId = d.id;
+    editor.value = d.text;
+    history.reset();
+    currentFile = null;
+    currentContent = d.text;
     markSaved();
+    refreshTabs();
   }
+
   updateStats();
   highlightEditor();
   history.reset();
   syncZoomBtn();
   renderPreview();
+
+  // PWA：注册 service worker（仅 http/https 环境有效，file:// 下静默跳过）
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.protocol === "http:")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
 })();
 </script>
 </body>

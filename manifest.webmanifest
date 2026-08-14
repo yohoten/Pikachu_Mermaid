@@ -1,0 +1,20 @@
+{
+  "name": "Pikachu Mermaid — 图表编辑器",
+  "short_name": "Pikachu Mermaid",
+  "description": "零依赖的 Mermaid 图表编辑器，支持实时预览、模板、导出与离线使用。",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1e1e2e",
+  "theme_color": "#27273a",
+  "icons": [
+    {
+      "src": "Pikachu_Mermaid.ico",
+      "sizes": "256x256",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}

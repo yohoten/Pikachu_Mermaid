@@ -9,15 +9,19 @@
 | 实时预览 | 编辑即渲染，200ms 防抖，图表类型自动识别，预览背景随主题自适应 |
 | 语法高亮 | 关键词（蓝）、箭头（红）、注释（绿）、字符串/数字（彩色），零依赖实现 |
 | 撤销 / 重做 | 自建历史栈（200 步上限），连续输入合并，`beforeinput` 统一记录（覆盖粘贴 / 中文输入法），`Ctrl+Z` / `Ctrl+Y` |
-| 图表模板 | 默认 9 种（流程图/序列图/甘特图/类图/状态图/饼图/思维导图/象限图/雷达图），可增删改、导入导出 JSON，localStorage 持久化 |
+| 图表模板 | 默认 9 种（流程图/序列图/甘特图/类图/状态图/饼图/思维导图/象限图/雷达图），可按类型分组显示，可增删改、导入导出 JSON，localStorage 持久化 |
 | 错误波浪线 | 渲染失败时在编辑器对应行标注红色波浪线，点击预览错误提示可跳转定位 |
 | 主题切换 | default / neutral / dark / forest 四种 mermaid 主题 |
-| 缩放 | 预览区放大 / 缩小 / 重置 |
-| 导出 PNG / SVG / PDF | PNG 2x 超采样（背景可选主题/白色/透明）、SVG 序列化、PDF 走系统打印对话框（选"另存为 PDF"），仅打印预览区 |
+| 缩放 | 预览区放大 / 缩小 / 重置，`Ctrl+滚轮` 快速缩放 |
+| 多文件标签页 | 多文档并行编辑，每标签独立撤销历史，草稿按标签整体恢复 |
+| 大纲导航 | 自动解析 subgraph / section / participant 生成可点击目录，跳转对应代码行 |
+| 全屏预览 | `Ctrl+Enter` 一键进入全屏演示模式 |
+| 导出 PNG / SVG / PDF / MD | PNG 2x 超采样（背景可选主题/白色/透明）、SVG 序列化、PDF 走系统打印对话框（选"另存为 PDF"）、Markdown 导出含 mermaid 代码块 |
 | 复制 Markdown / SVG | 一键复制 ```` ```mermaid ```` 代码块或 SVG 源码到剪贴板，方便粘贴到 Typora / 语雀 / Notion |
 | 打开 / 保存 | 支持 `.mmd` / `.mermaid` / `.txt`，UTF-8 优先、GBK 自动兼容 |
-| 草稿自动恢复 | 编辑内容每 0.5s 自动存入 localStorage，下次启动可恢复未保存内容 |
+| 草稿自动恢复 | 编辑内容每 0.5s 自动存入 localStorage，下次启动可恢复未保存内容（多标签整体恢复） |
 | 错误定位 | 渲染失败时解析错误行号，点击提示即可跳转到对应行 |
+| PWA 离线支持 | 提供 manifest + Service Worker，通过 http 服务访问时可"安装为应用"并离线使用 |
 | 未保存提示 | 关闭 / 刷新页面时浏览器原生提示 |
 
 ## 🚀 使用方法
@@ -36,20 +40,26 @@
 | `Ctrl+Z` / `Ctrl+Y` | 撤销 / 重做 |
 | `Ctrl+S` | 保存 |
 | `Ctrl+O` | 打开 |
-| `Ctrl+N` | 新建 |
+| `Ctrl+N` | 新建标签页 |
+| `Ctrl+Enter` | 全屏预览 / 退出全屏 |
+| `Ctrl+滚轮` | 缩放预览 |
 | `Tab` | 缩进（插入 4 空格） |
 
 ## 📁 项目结构
 ```
 Pikachu_Mermaid/
-├── index.html          # 单文件应用（UI + 逻辑 + 模板全部内嵌）
-├── mermaid.min.js      # 本地 mermaid v11（离线可用，支持全部图表）
-├── Pikachu_Mermaid.ico # 应用图标（浏览器标签页 / 快捷键 / PWA）
+├── index.html             # 单文件应用（UI + 逻辑 + 模板全部内嵌）
+├── mermaid.min.js         # 本地 mermaid v11（离线可用，支持全部图表）
+├── Pikachu_Mermaid.ico    # 应用图标（浏览器标签页 / 快捷键 / PWA）
+├── manifest.webmanifest   # PWA 清单（安装为应用 / 离线）
+├── sw.js                  # Service Worker（离线缓存）
+├── test/
+│   ├── check.js           # 回归测试：JS 语法/HTML/ID/功能存在性
+│   └── func_test.js       # 功能测试：高亮错误行/大纲解析
 └── README.md
 ```
-```
 
-总大小约 **3.7 MB**（mermaid.min.js 3.4MB + index.html 约 0.3MB），无任何运行时依赖。
+总大小约 **3.7 MB**（mermaid.min.js 3.4MB + index.html 约 0.3MB），无任何运行时依赖。运行 `node test/check.js` 可一键回归。
 
 ## 🧱 架构说明
 
