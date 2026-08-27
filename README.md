@@ -62,7 +62,9 @@
 
 ## 🚀 部署到 GitHub Pages（在线访问）
 
-本项目已托管于 **https://yohoten.github.io/Pikachu_Mermaid/**。若需更新线上版本：
+本项目已托管于**https://yohoten.github.io/Pikachu_Mermaid/**
+
+若需更新线上版本：
 
 ```
 1. git init && git add . && git commit -m "update"
