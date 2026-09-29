@@ -17,6 +17,11 @@ self.addEventListener("install", (event) => {
   );
 });
 
+// 接收页面指令后立即接管（用于「有新版本 → 点此刷新」）
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 // 激活：清理旧缓存
 self.addEventListener("activate", (event) => {
   event.waitUntil(

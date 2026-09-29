@@ -217,6 +217,8 @@
     flex-shrink: 0;
   }
   #statusbar .right { margin-left: auto; }
+  #appVersionWrap { color: var(--muted); }
+  #appVersionWrap #appVersion { font-family: Consolas, monospace; }
   #renderState { color: var(--accent2); }
   #chartTypeTag { color: var(--accent); }
 
@@ -271,6 +273,7 @@
   #btnNewTab:hover { border-color: var(--accent); }
 
   /* ── 大纲面板 ── */
+  /* 大纲面板：不再硬编码浅色，改由 applyThemeSkin() 按当前 mermaid 主题注入 */
   #outlinePanel {
     position: sticky; top: 0;
     background: #f7f7f9;
@@ -280,16 +283,17 @@
     padding: 8px 10px;
     font-size: 12px;
   }
-  .outline-title { font-weight: 600; color: #444; margin-bottom: 6px; }
+  .outline-title { font-weight: 600; color: inherit; margin-bottom: 6px; }
   #outlineList { display: flex; flex-direction: column; gap: 2px; }
   .outline-item {
-    color: #555; cursor: pointer; padding: 2px 4px; border-radius: 3px;
+    color: inherit; opacity: .85; cursor: pointer;
+    padding: 2px 4px; border-radius: 3px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .outline-item:hover { background: #ececf2; color: #222; }
+  .outline-item:hover { background: rgba(128,128,128,.18); opacity: 1; }
   .outline-item.indent-1 { padding-left: 16px; }
   .outline-item.indent-2 { padding-left: 28px; }
-  .outline-item .oline { color: #999; margin-right: 4px; }
+  .outline-item .oline { opacity: .6; margin-right: 4px; }
 
   /* ── 全屏预览 ── */
   body.fullscreen #toolbar, body.fullscreen #tabBar, body.fullscreen #statusbar,
@@ -300,7 +304,8 @@
   /* ── 打印 / 导出 PDF ── */
   @media print {
     body { background: #ffffff !important; overflow: visible !important; }
-    #toolbar, #editorPane, #divider, #statusbar, #fileInput { display: none !important; }
+    #toolbar, #editorPane, #divider, #statusbar, #fileInput,
+    #outlinePanel, #appVersionWrap { display: none !important; }
     #main { display: block !important; }
     #previewPane { flex: none !important; width: 100% !important; }
     .pane-title { display: none !important; }
@@ -322,7 +327,7 @@
 <body>
 
   <div id="toolbar">
-    <button id="btnNew" title="新建文件 (Ctrl+N)">新建</button>
+    <button id="btnNew" title="新建标签页 (Alt+N)">新建</button>
     <button id="btnOpen" title="打开 .mmd / .txt 文件 (Ctrl+O)">打开</button>
     <button id="btnSave" title="保存 .mmd 文件 (Ctrl+S)">保存</button>
     <span class="sep"></span>
@@ -364,7 +369,7 @@
   <!-- 多文件标签栏 -->
   <div id="tabBar">
     <div id="tabList"></div>
-    <button id="btnNewTab" title="新建标签页">+</button>
+    <button id="btnNewTab" title="新建标签页 (Alt+N)">+</button>
   </div>
 
   <div id="main">
@@ -400,6 +405,7 @@
 
   <div id="statusbar">
     <span>Pikachu Mermaid</span>
+    <span id="appVersionWrap">v<span id="appVersion">—</span></span>
     <span id="renderState">就绪</span>
     <span class="right" id="fileName">未命名.mmd</span>
   </div>
@@ -434,6 +440,9 @@
 <script src="mermaid.min.js"></script>
 <script>
 "use strict";
+
+// 应用版本号：改动本文件时同步 package.json 与 README 的版本号
+const APP_VERSION = "1.1.0";
 
 /* =====================================================================
  * 模板（从原 templates/templates.json 迁移，内嵌避免 file:// 下 fetch 受限）
@@ -506,12 +515,10 @@ function applyTemplate(idx) {
   editor.value = t.code;
   history.reset();
   markSaved();
-  clearDraft();
   const doc = getActiveDoc();
   if (doc) { doc.text = editor.value; doc.savedText = editor.value; }
-  updateStats();
-  highlightEditor();
-  renderPreview();
+  syncEditorUI();
+  writeDraft();
 }
 
 /* =====================================================================
@@ -528,7 +535,10 @@ function detectChartType(code) {
     ["xychart", "XY 图"], ["block-beta", "块图"], ["sankey-beta", "桑基图"],
   ];
   for (const [pattern, label] of rules) {
-    if (new RegExp("^\\s*" + pattern + "\\b", "m").test(code)) return label;
+    // 必须用非捕获分组包住 pattern：pattern 内含 "|"（如 "graph|flowchart"），
+    // 直接拼接会变成 (^\s*graph)|(flowchart\b)，右分支丢了行首锚点，导致正文里
+    // 出现 "flowchart" 一词就被误判成流程图
+    if (new RegExp("^\\s*(?:" + pattern + ")\\b", "m").test(code)) return label;
   }
   return "未知";
 }
@@ -598,7 +608,11 @@ function highlight(code, errorLine) {
       let j = i + 1;
       while (j < n && code[j] !== ch) j++;
       if (j >= n) j = n;
-      out += '<span class="tok-str">' + escapeHtml(code.slice(i, j + 1)) + "</span>";
+      const raw = code.slice(i, j + 1);
+      // 未闭合引号会把后续内容整段吞进来，其中的换行必须计入行号，
+      // 否则之后所有行的 errorLine 判定都会偏移，波浪线标错行
+      line += (raw.match(/\n/g) || []).length;
+      out += '<span class="tok-str">' + escapeHtml(raw) + "</span>";
       i = j + 1;
       continue;
     }
@@ -697,7 +711,9 @@ class HistoryManager {
     this.setSel(s.start, s.end);
     this.pendingBefore = this.snap();
     this.syncButtons();
-    renderPreview();
+    // 撤销/重做是直接赋值 editor.value，绕过了 input 事件，
+    // 必须手动收口 UI 刷新，否则高亮层会停在旧文本上导致错位
+    syncEditorUI();
   }
   reset() {
     this.stack = []; this.redoStack = []; this.pendingBefore = null;
@@ -707,8 +723,6 @@ class HistoryManager {
     $("btnUndo").disabled = this.stack.length === 0;
     $("btnRedo").disabled = this.redoStack.length === 0;
   }
-  get canUndo() { return this.stack.length > 0; }
-  get canRedo() { return this.redoStack.length > 0; }
   // 导出当前历史状态（用于多标签切换时保存）
   saveState() {
     return {
@@ -767,7 +781,7 @@ function createDoc(text, file, name) {
   const id = ++docSeq;
   const doc = {
     id,
-    name: name || file || ("未命名" + (docs.length + 1) + ".mmd"),
+    name: name || file || ("未命名" + id + ".mmd"),   // 用自增 id 而非 docs.length，删标签后不会重名
     file: file || null,
     text: text || "",
     savedText: text || "",
@@ -826,10 +840,11 @@ function refreshTabs() {
 function closeDoc(id) {
   const doc = docs.find(d => d.id === id);
   if (!doc) return;
-  if (id === activeDocId && isDirty() && !confirm("「" + doc.name + "」未保存，确定关闭吗？")) return;
+  // 脏检查必须覆盖非活动标签：原实现只判了 activeDocId，关掉后台标签会静默丢内容
+  if (docIsDirty(doc) && !confirm("「" + doc.name + "」未保存，确定关闭吗？")) return;
   docs = docs.filter(d => d.id !== id);
   if (docs.length === 0) {
-    const d = createDoc(templates[0].code, null, "未命名1.mmd");
+    const d = createDoc(templates[0].code, null);
     activeDocId = d.id;
     loadDoc(d);
     markSaved();
@@ -846,36 +861,48 @@ function closeDoc(id) {
 function newDoc() {
   const existing = getActiveDoc();
   if (existing) snapshotActiveDoc();
-  const d = createDoc(templates[0].code, null, "未命名" + (docs.length + 1) + ".mmd");
+  const d = createDoc(templates[0].code, null);   // 名称由 createDoc 按 id 生成，保证唯一
   activeDocId = d.id;
   editor.value = d.text;
   history.reset();
   currentFile = null;
   currentContent = d.text;
   markSaved();
-  clearDraft();
-  updateStats();
-  highlightEditor();
-  renderPreview();
+  syncEditorUI();
+  writeDraft();
   refreshTabs();
 }
 
 $("btnNewTab").addEventListener("click", newDoc);
 
 // 供打开文件/init 调用：在新标签页打开文档
-window.__openDocInTab = function(file, text) {
+function openDocInTab(file, text) {
   const d = createDoc(text, file);
   loadDoc(d);
   markSaved();
-  clearDraft();
+  writeDraft();   // 只刷新草稿快照；不能清库，那会带走其它标签的未保存内容
   return d;
-};
+}
 
 /* =====================================================================
  * 渲染预览
  * ===================================================================== */
-const THEME_BG = { default: "#ffffff", neutral: "#ffffff", dark: "#1e1e2e", forest: "#f4f1ea" };
-function previewBg() { return THEME_BG[$("themeSelect").value] || "#ffffff"; }
+const THEME_SKIN = {
+  default: { bg: "#ffffff", outlineBg: "#f7f7f9", outlineBorder: "#e0e0e6", outlineText: "#333333" },
+  neutral: { bg: "#ffffff", outlineBg: "#f7f7f9", outlineBorder: "#e0e0e6", outlineText: "#333333" },
+  dark:    { bg: "#1e1e2e", outlineBg: "#2a2a3c", outlineBorder: "#3a3a52", outlineText: "#cdd0e0" },
+  forest:  { bg: "#f4f1ea", outlineBg: "#ebe6d6", outlineBorder: "#d9d2bd", outlineText: "#4a4a38" },
+};
+function previewBg() { return (THEME_SKIN[$("themeSelect").value] || THEME_SKIN.default).bg; }
+// 预览区背景与大纲面板一起随主题切换，否则 dark 主题下深底 + 浅色面板会很突兀
+function applyThemeSkin() {
+  const skin = THEME_SKIN[$("themeSelect").value] || THEME_SKIN.default;
+  previewScroll.style.background = skin.bg;
+  const op = $("outlinePanel");
+  op.style.background = skin.outlineBg;
+  op.style.borderColor = skin.outlineBorder;
+  op.style.color = skin.outlineText;
+}
 
 function showRenderError(err) {
   const msg = String(err && err.message || err);
@@ -905,25 +932,25 @@ function jumpToLine(line) {
   editor.scrollTop = Math.round(ratio * (editor.scrollHeight - editor.clientHeight));
 }
 
+/* 只落盘「正文 + 文件名」。
+ * 注意：不要把 historyState 写进来——HistoryManager 的每一项持有两份完整文本快照，
+ * 200 步历史会让单次写入量膨胀到 O(400N)，实测 5KB 文档即 ~2MB，足以撑爆 localStorage 配额。 */
+function writeDraft() {
+  try {
+    const snap = docs.map(d => ({
+      name: d.name, file: d.file,
+      text: d.id === activeDocId ? editor.value : d.text,
+      savedText: d.id === activeDocId ? currentContent : d.savedText,
+    }));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, docs: snap, at: Date.now() }));
+  } catch (e) {
+    // 容量满 / 隐私模式：必须让用户看见，草稿并不是可靠的兜底
+    $("renderState").textContent = "⚠ 草稿未保存（存储空间不足）";
+  }
+}
 function scheduleDraft() {
   clearTimeout(draftTimer);
-  draftTimer = setTimeout(() => {
-    try {
-      // 保存全部文档（含未保存文本、文件名、历史），保证多标签可整体恢复
-      const snap = docs.map(d => ({
-        name: d.name, file: d.file,
-        text: d.id === activeDocId ? editor.value : d.text,
-        savedText: d.savedText,
-        historyState: d.id === activeDocId ? history.saveState() : d.historyState,
-      }));
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ docs: snap, at: Date.now() }));
-    } catch (e) { /* 隐私模式 / 容量满时静默 */ }
-  }, 500);
-}
-
-function clearDraft() {
-  clearTimeout(draftTimer);
-  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  draftTimer = setTimeout(writeDraft, 500);
 }
 
 function debouncedPreview() {
@@ -934,7 +961,7 @@ function debouncedPreview() {
 async function renderPreview() {
   const code = editor.value;
   if (isRendering) { debouncedPreview(); return; }
-  previewScroll.style.background = previewBg();
+  applyThemeSkin();
   if (!code.trim()) {
     previewContainer.innerHTML = "";
     $("renderState").textContent = "就绪";
@@ -1044,6 +1071,13 @@ function updateStats() {
 function isDirty() {
   return editor.value !== currentContent;
 }
+// 文档级脏检查：非活动标签没有 currentContent 快照，必须走 doc 自身字段。
+// doc.text 由 syncEditorUI/snapshotActiveDoc 维护为最新值，doc.savedText 为最近一次保存值。
+function docIsDirty(doc) {
+  if (!doc) return false;
+  if (doc.id === activeDocId) return editor.value !== currentContent;
+  return (doc.text || "") !== (doc.savedText || "");
+}
 function setDirtyState() {
   const dirty = isDirty();
   document.title = (dirty ? "● " : "") + "Pikachu Mermaid — 图表编辑器";
@@ -1077,7 +1111,7 @@ $("fileInput").addEventListener("change", async (e) => {
       text = new TextDecoder("gbk").decode(buf);
     }
     // 打开文件 → 新标签页
-    window.__openDocInTab(file.name, text);
+    openDocInTab(file.name, text);
     $("renderState").textContent = "已打开：" + file.name;
   } catch (err) {
     alert("打开文件失败：" + err);
@@ -1085,9 +1119,13 @@ $("fileInput").addEventListener("change", async (e) => {
 });
 $("btnSave").addEventListener("click", saveFile);
 
+let lastSaveName = null;        // 记住上次保存名，避免每次都从「未命名.mmd」开始
 function saveFile() {
-  const name = prompt("保存为（.mmd）", currentFile || "未命名.mmd");
+  let name = prompt("保存为（.mmd）", currentFile || lastSaveName || "未命名.mmd");
+  if (name === null) return;
+  name = String(name).trim();
   if (!name) return;
+  if (!/\.[^./\\]+$/.test(name)) name += ".mmd";   // 没写扩展名时自动补
   const blob = new Blob([editor.value], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1098,10 +1136,15 @@ function saveFile() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   currentFile = name;
+  lastSaveName = name;
   const doc = getActiveDoc();
-  if (doc) { doc.name = name; doc.file = name; doc.savedText = editor.value; refreshTabs(); }
+  if (doc) {
+    doc.name = name; doc.file = name;
+    doc.savedText = editor.value; doc.text = editor.value;
+    refreshTabs();
+  }
   markSaved();
-  clearDraft();
+  writeDraft();   // 原实现在此清空整个草稿库，会连坐清掉其它标签的未保存内容
   $("renderState").textContent = "已保存：" + name;
 }
 
@@ -1119,6 +1162,16 @@ function getSvgString() {
     clone.setAttribute("height", vb.height);
     clone.style.width = vb.width + "px";
     clone.style.height = vb.height + "px";
+  } else {
+    // 少数图表（如部分 xychart 分支）没有 viewBox，用实际渲染尺寸兜底，
+    // 否则导出的 SVG/PNG 尺寸会退化为默认值
+    const rect = svg.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      clone.setAttribute("width", Math.round(rect.width));
+      clone.setAttribute("height", Math.round(rect.height));
+      clone.style.width = rect.width + "px";
+      clone.style.height = rect.height + "px";
+    }
   }
   return new XMLSerializer().serializeToString(clone);
 }
@@ -1221,6 +1274,7 @@ $("btnExportPng").addEventListener("click", () => {
     if (bgColor) { ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     canvas.toBlob((pngBlob) => {
+      if (!pngBlob) { alert("PNG 导出失败：画布导出为空"); return; }
       const pngUrl = URL.createObjectURL(pngBlob);
       const a = document.createElement("a");
       a.href = pngUrl;
@@ -1400,14 +1454,38 @@ editor.addEventListener("keydown", (e) => {
   if (e.key === "Tab") {
     e.preventDefault();
     history.beforeEdit(); // setRangeText 不触发 beforeinput，手动记录
+    const raw = editor.value;
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
-    editor.setRangeText("    ", start, end, "end");
+    const INDENT = "    ";
+    if (start !== end && raw.slice(start, end).indexOf("\n") !== -1) {
+      // 跨行选择 → 整块缩进 / 反缩进
+      const blockStart = raw.lastIndexOf("\n", start - 1) + 1;
+      const nlAt = raw.indexOf("\n", end);
+      const blockEnd = nlAt === -1 ? raw.length : nlAt;
+      const shifted = raw.slice(blockStart, blockEnd).split("\n").map((ln) => {
+        if (e.shiftKey) return ln.replace(/^( {1,4}|\t)/, "");
+        return ln.trim() ? INDENT + ln : ln;
+      });
+      editor.setSelectionRange(blockStart, blockEnd);
+      editor.setRangeText(shifted.join("\n"), blockStart, blockEnd, "select");
+    } else if (e.shiftKey) {
+      // 光标处反缩进：退掉行首最多 4 个空格
+      const lineStart = raw.lastIndexOf("\n", start - 1) + 1;
+      const before = raw.slice(lineStart, start);
+      const del = before.endsWith(INDENT) ? 4 : (before.endsWith(" ") ? 1 : 0);
+      if (del) editor.setRangeText("", start - del, start, "end");
+    } else {
+      editor.setRangeText(INDENT, start, end, "end");
+    }
+    history.afterEdit(); // 与 beforeEdit 成对，否则缩进不进撤销栈
+    syncEditorUI();      // setRangeText 不触发 input，手动收口 UI
     return;
   }
   if (e.key === "s" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveFile(); return; }
   if (e.key === "o" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnOpen").click(); return; }
-  if (e.key === "n" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnNew").click(); return; }
+  // Ctrl+N / Cmd+N 是浏览器保留快捷键（新建窗口），preventDefault 拦不住，改用 Alt+N
+  if (e.key === "n" && e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); $("btnNew").click(); return; }
   if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); history.undo(); return; }
   if ((e.key === "y" || (e.key === "z" && e.shiftKey)) && (e.ctrlKey || e.metaKey)) { e.preventDefault(); history.redo(); return; }
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); toggleFullscreen(); return; }
@@ -1418,15 +1496,21 @@ editor.addEventListener("wheel", (e) => {
   e.preventDefault();
   zoomBy(e.deltaY < 0 ? 1.1 : 0.9);
 }, { passive: false });
-editor.addEventListener("input", () => {
-  history.afterEdit();
+/* 编辑器内容变更后的统一刷新入口（统计 / 高亮 / 脏标记 / 草稿 / 预览）。
+ * 凡是绕过 input 事件直接改 editor.value 的路径（撤销重做、Tab 缩进、模板套用…）
+ * 都必须显式调用它——透明 textarea 方案下漏一次 highlightEditor() 就是肉眼可见的错位。 */
+function syncEditorUI() {
   const doc = getActiveDoc();
   if (doc) doc.text = editor.value;
   updateStats();
   highlightEditor();
+  setDirtyState();
   scheduleDraft();
   debouncedPreview();
-  setDirtyState();
+}
+editor.addEventListener("input", () => {
+  history.afterEdit();
+  syncEditorUI();
 });
 
 btnUndo.addEventListener("click", () => history.undo());
@@ -1478,7 +1562,8 @@ document.addEventListener("mouseup", () => {
  * 关闭/刷新未保存确认
  * ===================================================================== */
 window.addEventListener("beforeunload", (e) => {
-  if (isDirty()) {
+  // 任一标签脏都要提示，而不是只看当前活动标签
+  if (docs.some(docIsDirty)) {
     e.preventDefault();
     e.returnValue = ""; // 触发浏览器原生提示
   }
@@ -1495,23 +1580,22 @@ window.addEventListener("beforeunload", (e) => {
     // 多标签草稿恢复：重建所有文档，激活第一个
     docs = draft.docs.map(d => ({
       id: ++docSeq,
-      name: d.name || d.file || "未命名.mmd",
+      name: d.name || d.file || ("未命名" + docSeq + ".mmd"),
       file: d.file || null,
       text: d.text || "",
       savedText: d.savedText !== undefined ? d.savedText : (d.text || ""),
-      historyState: d.historyState || null,
+      historyState: null,
     }));
     const first = docs[0];
     activeDocId = first.id;
     editor.value = first.text || "";
-    history.restoreState(first.historyState);
     currentFile = first.file;
     currentContent = first.savedText;
     refreshTabs();
     $("renderState").textContent = "已恢复上次未保存内容（" + docs.length + " 个标签）";
   } else {
     // 无草稿 → 新建初始文档（默认模板）
-    const d = createDoc(templates[0].code, null, "未命名1.mmd");
+    const d = createDoc(templates[0].code, null);
     activeDocId = d.id;
     editor.value = d.text;
     history.reset();
@@ -1529,8 +1613,23 @@ window.addEventListener("beforeunload", (e) => {
 
   // PWA：注册 service worker（仅 http/https 环境有效，file:// 下静默跳过）
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.protocol === "http:")) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      // 检测到新 SW 已安装就绪 → 主动提示，不必让用户自己 Ctrl+F5
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "installed" && navigator.serviceWorker.controller) {
+            if (confirm("检测到新版本，是否立即刷新？")) {
+              sw.postMessage({ type: "SKIP_WAITING" });
+              location.reload();
+            }
+          }
+        });
+      });
+    }).catch(() => {});
   }
+  $("appVersion").textContent = APP_VERSION;
 })();
 </script>
 </body>

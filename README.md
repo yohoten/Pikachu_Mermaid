@@ -2,7 +2,7 @@
 
 零依赖的 Mermaid 图表编辑器 —— **纯 Web 单文件方案**，浏览器打开即可用，无需 Python / PyQt / 任何安装，支持 PWA 安装为桌面应用并离线使用。
 
-![](https://i.imgs.ovh/2026/08/15/19799f6e94b57f266af71b8b6c2a4b23.jpg)
+![Pikachu Mermaid 界面](docs/screenshot.jpg)
 
 ## ✨ 特性
 
@@ -15,7 +15,7 @@
 | 错误波浪线 | 渲染失败时在编辑器对应行标注红色波浪线，点击预览错误提示可跳转定位 |
 | 主题切换 | default / neutral / dark / forest 四种 mermaid 主题 |
 | 缩放 | 预览区放大 / 缩小 / 重置，`Ctrl+滚轮` 快速缩放 |
-| 多文件标签页 | 多文档并行编辑，每标签独立撤销历史，草稿按标签整体恢复 |
+| 多文件标签页 | 多文档并行编辑，每标签独立撤销历史（切换标签保留，**不跨会话持久化**），草稿按标签整体恢复 |
 | 大纲导航 | 自动解析 subgraph / section / participant 生成可点击目录，跳转对应代码行 |
 | 全屏预览 | `Ctrl+Enter` 一键进入全屏演示模式 |
 | 导出 PNG / SVG / PDF / MD | PNG 2x 超采样（背景可选主题/白色/透明）、SVG 序列化、PDF 走系统打印对话框（选"另存为 PDF"）、Markdown 导出含 mermaid 代码块 |
@@ -52,13 +52,13 @@
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Ctrl+Z` / `Ctrl+Y` | 撤销 / 重做 |
+| `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` | 撤销 / 重做 |
 | `Ctrl+S` | 保存 |
 | `Ctrl+O` | 打开 |
-| `Ctrl+N` | 新建标签页 |
+| `Alt+N` | 新建标签页（`Ctrl+N` 是浏览器保留快捷键，网页拦不住，故改用 `Alt+N`） |
 | `Ctrl+Enter` | 全屏预览 / 退出全屏 |
 | `Ctrl+滚轮` | 缩放预览 |
-| `Tab` | 缩进（插入 4 空格） |
+| `Tab` / `Shift+Tab` | 缩进 / 反缩进（选中多行时整块缩进） |
 
 ## 🚀 部署到 GitHub Pages（在线访问）
 
@@ -87,19 +87,43 @@
 ```
 Pikachu_Mermaid/
 ├── index.html             # 单文件应用（UI + 逻辑 + 模板全部内嵌）
-├── mermaid.min.js         # 本地 mermaid v11（离线可用，支持全部图表）
+├── mermaid.min.js         # 本地 mermaid v11.16.1（离线可用，支持全部图表）
 ├── Pikachu_Mermaid.ico    # 应用图标（浏览器标签页 / 快捷键 / PWA）
 ├── icon-192x192.png       # PWA 图标（192px，安装必需）
 ├── icon-512x512.png       # PWA 图标（512px，安装必需）
 ├── manifest.webmanifest   # PWA 清单（安装为应用 / 离线）
 ├── sw.js                  # Service Worker（离线缓存）
+├── LICENSE                # MIT
+├── package.json           # 仅提供 npm test 入口，运行时零依赖
 ├── test/
-│   ├── check.js           # 回归测试：JS 语法/HTML/ID/功能存在性
-│   └── func_test.js       # 功能测试：高亮错误行/大纲解析
+│   ├── check.js           # 静态回归：JS 语法 / HTML 标签 / ID / 关键功能 / README 与实现一致性
+│   ├── func_test.js       # 行为回归：highlight 错误行、renderOutline 解析（提取真实函数执行）
+│   └── e2e_browser.py     # 可选：真实浏览器端到端回归（需 playwright，缺失时自动跳过）
+├── docs/
+│   └── screenshot.jpg     # README 首图（已落地到仓库，不依赖第三方图床）
 └── README.md
 ```
 
-总大小约 **3.7 MB**（mermaid.min.js 3.4MB + index.html 约 0.3MB），无任何运行时依赖。运行 `node test/check.js` 可一键回归。
+总大小约 **3.86 MB**（mermaid.min.js 3.40 MB + index.html 约 0.06 MB + docs/screenshot.jpg 0.17 MB），无任何运行时依赖。
+
+**运行回归**
+
+```bash
+npm test                   # = check.js（56 项）+ func_test.js（19 项）
+python test/e2e_browser.py # 可选：真实 Chrome/Edge 端到端（18 项，需 playwright，缺失自动跳过）
+```
+
+前两个脚本都**直接从 `index.html` 提取真实函数体执行**，而不是在测试里重写一份逻辑——因此改坏实现不会被假通过掩盖。
+e2e 脚本则覆盖只有在真实 DOM 下才暴露的问题：高亮层错位、Tab/撤销、关闭脏标签是否弹确认、草稿体积。
+
+## 🧪 质量保障
+
+| 环节 | 内容 |
+|------|------|
+| 回归入口 | `npm test`（check.js 56 项 + func_test.js 19 项）+ 可选 e2e 18 项 |
+| 测试方式 | 从 `index.html` 提取真实函数体执行 / 真实浏览器跑全流程 |
+| README 自核对 | check.js 会校验 README 的体积数字与实际文件相符、快捷键与实现一致 |
+| 已知边界 | 撤销历史仅在会话内保留（不落盘）——200 步 × 全文快照会撑爆 localStorage 配额 |
 
 ## 🧱 架构说明
 
@@ -116,19 +140,19 @@ mermaid 本质是 JS 图表库。旧版用「Python + PyQt5 + QWebEngineView（�
 - PNG 导出 → SVG 序列化 → Canvas 绘制 → Blob 下载
 - 打开/保存 → File API + Blob 下载，TextDecoder 自动回退 GBK
 - 未保存确认 → `beforeunload` 原生提示
-- 图表版本 → 本地 mermaid v11，全部 9 种模板离线可用
+- 图表版本 → 本地 mermaid v11.16.1，全部 9 种模板离线可用
 
 ## 🔗 与旧版对比
 
 | 维度 | 旧版（PyQt5） | 新版（纯 Web） |
 |------|--------------|----------------|
 | 运行时依赖 | Python + PyQt5 + PyQtWebEngine + svgwrite | 浏览器（系统自带） |
-| 体积 | 300MB+ 打包 | ~3.7MB |
-| 撤销/重做 | 完全失效 | 正常（200 步） |
+| 体积 | 300MB+ 打包 | ~3.86MB |
+| 撤销/重做 | 完全失效 | 正常（200 步；会话内保留，不跨会话持久化） |
 | 图表模板 | 思维导图等 3 种无法渲染（CDN v9.3） | 全部 9 种可用（v11） |
 | PNG 导出 | 常导出空白 | 可靠导出 |
 | 安装 | pip install + 打包 | 双击即用 |
 
 ## 📄 License
 
-MIT
+MIT — 详见 [LICENSE](LICENSE)。
