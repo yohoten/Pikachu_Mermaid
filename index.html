@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#27273a">
+<meta name="theme-color" content="#161924">
 <title>Pikachu Mermaid — 图表编辑器</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/x-icon" href="Pikachu_Mermaid.ico">
@@ -12,21 +12,53 @@
 <link rel="apple-touch-icon" sizes="512x512" href="icon-512x512.png">
 <style>
   :root {
-    --bg: #1e1e2e;
-    --panel: #27273a;
-    --panel2: #2f2f45;
-    --border: #3a3a52;
-    --text: #d8d8e8;
-    --muted: #8a8aa0;
-    --accent: #6c9bff;
-    --accent2: #5ad1a0;
-    --danger: #ff6b6b;
-    --keyword: #7db4ff;
-    --comment: #6fce8a;
-    --arrow: #ff8a8a;
+    color-scheme: dark;
+    --bg: #0e1017;
+    --panel: #161924;
+    --panel2: #1d2130;
+    --panel3: #252a3b;
+    --border: #2d3345;
+    --border-soft: #232838;
+    --text: #e7eaf3;
+    --text-strong: #f7f8fc;
+    --muted: #98a2b8;
+    --accent: #8b9dff;
+    --accent-weak: rgba(139, 157, 255, .14);
+    --accent2: #55d6a6;
+    --danger: #ff6b81;
+    --warning: #ffc46b;
+    --keyword: #8ab4ff;
+    --comment: #71d39a;
+    --arrow: #ff9a9a;
     --number: #d9a5ff;
     --string: #ffd27f;
     --caret: #ffffff;
+    --shadow: 0 14px 34px rgba(0, 0, 0, .32);
+    --radius: 10px;
+  }
+  body[data-ui="light"] {
+    color-scheme: light;
+    --bg: #f4f6fb;
+    --panel: #ffffff;
+    --panel2: #f0f3f9;
+    --panel3: #e7ebf4;
+    --border: #d9dfec;
+    --border-soft: #e8ecf5;
+    --text: #253047;
+    --text-strong: #111827;
+    --muted: #6b7690;
+    --accent: #4f63d2;
+    --accent-weak: rgba(79, 99, 210, .1);
+    --accent2: #1a9b74;
+    --danger: #d93b52;
+    --warning: #b7791f;
+    --keyword: #2255b8;
+    --comment: #1d8a5a;
+    --arrow: #c43d4b;
+    --number: #8b3fb8;
+    --string: #a45b00;
+    --caret: #253047;
+    --shadow: 0 14px 32px rgba(28, 39, 66, .12);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -304,8 +336,10 @@
   /* ── 打印 / 导出 PDF ── */
   @media print {
     body { background: #ffffff !important; overflow: visible !important; }
-    #toolbar, #editorPane, #divider, #statusbar, #fileInput,
-    #outlinePanel, #appVersionWrap { display: none !important; }
+    #toolbar, #tabBar, #editorPane, #divider, #statusbar, #fileInput,
+    #outlinePanel, #appVersionWrap, #aiPanel, #aiScrim, #templateModal {
+      display: none !important;
+    }
     #main { display: block !important; }
     #previewPane { flex: none !important; width: 100% !important; }
     .pane-title { display: none !important; }
@@ -322,48 +356,491 @@
     }
     .error-banner { display: none !important; }
   }
+
+  /* ═══════════════════════════════════════════════════════════
+   * v1.2 设计系统（后置覆盖，保留上方打印/全屏等规则）
+   * ═══════════════════════════════════════════════════════════ */
+  body {
+    font-family: "Inter", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ::selection { background: var(--accent-weak); }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border); border: 2px solid transparent;
+    border-radius: 8px; background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: padding-box; }
+
+  /* 工具栏：分组、圆角、主按钮强调 */
+  #toolbar {
+    position: relative; z-index: 5;
+    gap: 6px; padding: 8px 12px;
+    background: var(--panel); border-bottom: 1px solid var(--border-soft);
+    max-height: 88px;
+  }
+  #toolbar::before {
+    content: "PM"; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; margin-right: 2px;
+    border-radius: 9px; font-size: 11px; font-weight: 800; letter-spacing: .04em;
+    color: #fff; background: linear-gradient(135deg, #6679f0, #9a6bf3);
+    box-shadow: 0 4px 12px rgba(102, 121, 240, .35);
+  }
+  #toolbar button, #btnNewTab, .modal-actions button {
+    border-radius: 8px; padding: 6px 11px;
+    font-size: 12.5px; font-weight: 500;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+    transition: background .16s, border-color .16s, transform .16s, box-shadow .16s;
+  }
+  #toolbar button:hover:not(:disabled) { background: var(--panel3); transform: translateY(-1px); }
+  #toolbar button:active:not(:disabled) { transform: translateY(0); }
+  #toolbar .sep { height: 20px; margin: 0 3px; background: var(--border); }
+  #toolbar select, #pngBgSelect {
+    border-radius: 8px; padding: 5px 8px; font-size: 12.5px;
+  }
+  #btnUiTheme { min-width: 46px; }
+
+  /* 主区域：卡片化双栏 */
+  #main { gap: 8px; padding: 8px; }
+  #editorPane, #previewPane {
+    background: var(--panel);
+    border: 1px solid var(--border-soft);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .pane-title {
+    padding: 8px 12px; background: var(--panel2);
+    font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .pane-title > span:first-child::before {
+    content: ""; display: inline-block;
+    width: 6px; height: 6px; margin-right: 8px; border-radius: 50%;
+    background: var(--accent); vertical-align: middle;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  #editorStats, #chartTypeTag {
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--border-soft);
+    letter-spacing: 0; text-transform: none;
+  }
+  #divider { width: 8px; background: transparent; position: relative; }
+  #divider::after {
+    content: ""; position: absolute; left: 3px; top: 50%;
+    width: 2px; height: 38px; border-radius: 2px;
+    background: var(--border); transform: translateY(-50%); transition: .16s;
+  }
+  #divider:hover::after, #divider.active::after {
+    background: var(--accent); height: 60px; box-shadow: 0 0 12px var(--accent);
+  }
+
+  /* 编辑器 */
+  #editorHighlight, #editor {
+    padding: 14px 16px; font-size: 13px;
+    font-family: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+    line-height: 1.6;
+  }
+  #editor { caret-color: var(--accent); }
+  #editor::selection { background: var(--accent-weak); }
+
+  /* 预览 */
+  #previewScroll { padding: 22px; }
+  #outlinePanel { border-radius: 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, .06); }
+  .outline-item { border-radius: 5px; }
+
+  /* 状态栏 */
+  #statusbar {
+    gap: 8px; padding: 6px 14px;
+    background: var(--panel); border-top: 1px solid var(--border-soft);
+  }
+  #statusbar > span {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    background: var(--panel2); border: 1px solid var(--border-soft);
+    font-size: 11.5px;
+  }
+  #statusbar > span:first-child { color: var(--text-strong); font-weight: 650; letter-spacing: .02em; }
+  #renderState::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2); box-shadow: 0 0 8px var(--accent2);
+  }
+  #appVersionWrap { font-family: Consolas, monospace; }
+
+  /* 标签页 */
+  #tabBar { padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--border-soft); }
+  .tab { border-radius: 8px; padding: 5px 10px; background: var(--panel2); transition: .16s; }
+  .tab:hover { border-color: var(--accent); }
+  .tab.active {
+    background: var(--accent-weak); border-color: var(--accent);
+    color: var(--text-strong); box-shadow: inset 0 0 0 1px var(--accent-weak);
+  }
+  #btnNewTab { width: 28px; height: 28px; padding: 0; }
+
+  /* 弹窗 */
+  .modal-overlay { background: rgba(6, 8, 14, .68); backdrop-filter: blur(6px); }
+  .modal {
+    border-radius: 14px; padding: 18px; gap: 12px;
+    box-shadow: var(--shadow);
+  }
+  .modal h3 { font-size: 15px; font-weight: 650; color: var(--text-strong); }
+  .modal input[type=text], .modal textarea,
+  .ai-select, .ai-input, .ai-textarea {
+    outline: none; transition: border-color .16s, box-shadow .16s;
+  }
+  .modal input[type=text]:focus, .modal textarea:focus,
+  .ai-select:focus, .ai-input:focus, .ai-textarea:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak);
+  }
+  .modal-list .chip { border-radius: 999px; padding: 4px 11px; }
+  .modal-list .chip.active { background: var(--accent-weak); }
+  .modal-actions button:hover { background: var(--panel3); }
+
+  .error-banner {
+    background: rgba(255, 107, 129, .09); border-radius: 10px;
+  }
+
+  /* ── AI 助手抽屉 ── */
+  #aiScrim {
+    position: fixed; inset: 0; z-index: 88;
+    background: rgba(4, 6, 12, .42); opacity: 0; pointer-events: none;
+    transition: opacity .26s ease;
+  }
+  #aiScrim.show { opacity: 1; pointer-events: auto; }
+  #aiPanel {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 90;
+    width: 396px; max-width: 100vw;
+    display: flex; flex-direction: column;
+    background: var(--panel); border-left: 1px solid var(--border);
+    box-shadow: -18px 0 60px rgba(0, 0, 0, .38);
+    transform: translateX(105%);
+    transition: transform .3s cubic-bezier(.2, .8, .2, 1);
+  }
+  #aiPanel.open { transform: translateX(0); }
+  .ai-header {
+    position: relative; flex: none; padding: 16px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    background: linear-gradient(135deg, rgba(139, 157, 255, .16), rgba(154, 107, 243, .07));
+  }
+  .ai-header h2 { font-size: 15px; font-weight: 700; color: var(--text-strong); }
+  .ai-header p { margin-top: 4px; font-size: 11.5px; color: var(--muted); }
+  .ai-header .ai-btn { position: absolute; top: 14px; right: 14px; padding: 4px 9px; }
+  .ai-body {
+    flex: 1; min-height: 0; overflow: auto;
+    padding: 16px 18px 22px;
+    display: flex; flex-direction: column; gap: 15px;
+  }
+  .ai-section { display: flex; flex-direction: column; gap: 7px; }
+  .ai-row { display: flex; gap: 8px; align-items: flex-end; }
+  .ai-row > .ai-section { flex: 1; min-width: 0; }
+  .ai-label {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 11px; font-weight: 650; letter-spacing: .05em; color: var(--muted);
+  }
+  .ai-label .ai-btn { padding: 2px 7px; font-size: 10.5px; }
+  .ai-select, .ai-input, .ai-textarea {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12.5px; font-family: inherit;
+  }
+  .ai-textarea { resize: vertical; min-height: 84px; line-height: 1.55; }
+  .ai-code { font-family: "Cascadia Code", Consolas, monospace; }
+  .ai-hint { font-size: 10.8px; line-height: 1.55; color: var(--muted); }
+  .ai-check { display: inline-flex; align-items: center; gap: 4px; letter-spacing: 0; }
+  .ai-check input { accent-color: var(--accent); }
+  .ai-btn {
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 10px; font-size: 12px; cursor: pointer;
+    transition: background .16s, border-color .16s, opacity .16s;
+  }
+  .ai-btn:hover:not(:disabled) { background: var(--panel3); border-color: var(--accent); }
+  .ai-btn:disabled { opacity: .42; cursor: not-allowed; }
+  .ai-btn.primary {
+    background: linear-gradient(135deg, #6679f0, #9a6bf3);
+    color: #fff; border-color: transparent; font-weight: 650;
+    box-shadow: 0 4px 14px rgba(102, 121, 240, .28);
+  }
+  .ai-btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .ai-btn.ghost:hover:not(:disabled) { color: var(--text); }
+  #aiResult {
+    min-height: 132px; max-height: 268px; overflow: auto;
+    padding: 11px 12px; border-radius: 10px;
+    background: var(--panel2); border: 1px solid var(--border);
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 12px; line-height: 1.6; color: var(--text);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  #aiResult.placeholder {
+    font-family: inherit; color: var(--muted); line-height: 1.6;
+  }
+  #aiHistory { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ai-history-item {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--panel2); border: 1px solid var(--border);
+    color: var(--muted); font-size: 11px; cursor: pointer;
+  }
+  .ai-history-item:hover { color: var(--text); border-color: var(--accent); }
+  .ai-section details, details.ai-section { gap: 7px; }
+  details.ai-section > summary { list-style: none; }
+  details.ai-section > summary::-webkit-details-marker { display: none; }
+  details.ai-section[open] > summary::after { content: "▾"; }
+  details.ai-section:not([open]) > summary::after { content: "▸"; }
+
+  /* ═══════════════════════════════════════════════════════════
+   * v1.3 菜单化工具栏 + 皮卡丘品牌图标
+   * ═══════════════════════════════════════════════════════════ */
+  .svg-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ic {
+    width: 16px; height: 16px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .ic-caret { width: 12px; height: 12px; opacity: .65; }
+
+  #toolbar {
+    flex-wrap: nowrap; height: 50px; min-height: 50px; max-height: 50px;
+    padding: 0 12px; gap: 10px; overflow: visible;
+  }
+  #toolbar::before { display: none; }
+  .brand {
+    display: flex; align-items: center; gap: 9px; flex: none;
+    padding-right: 12px; border-right: 1px solid var(--border-soft);
+  }
+  .brand-icon, #statusbar > span:first-child::before {
+    background: linear-gradient(135deg, #ffdf72, #ffb52e);
+    box-shadow: 0 3px 10px rgba(255, 181, 46, .28);
+  }
+  .brand-icon {
+    width: 28px; height: 28px; padding: 2px;
+    border-radius: 8px; object-fit: contain;
+  }
+  .brand-name {
+    font-size: 13px; font-weight: 700; color: var(--text-strong);
+    white-space: nowrap; letter-spacing: -.01em;
+  }
+  .quick-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+  #toolbar .icon-btn {
+    position: relative; width: 32px; height: 32px; padding: 0;
+    display: grid; place-items: center;
+  }
+  #toolbar .icon-btn[data-tip]:hover::after {
+    content: attr(data-tip); position: absolute;
+    top: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    white-space: nowrap; padding: 5px 8px; border-radius: 6px;
+    background: var(--panel3); color: var(--text);
+    border: 1px solid var(--border); box-shadow: var(--shadow);
+    font-size: 11px; z-index: 130; pointer-events: none;
+  }
+  /* 与其他工具栏按钮同级，仅保留图标用于识别 */
+  #btnAiPanel {
+    display: inline-flex; align-items: center; gap: 7px;
+    white-space: nowrap;
+  }
+  .menu-bar { display: flex; align-items: center; gap: 2px; flex: none; }
+  .menu { position: relative; }
+  #toolbar .menu-trigger {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: transparent; color: var(--muted);
+    border: 1px solid transparent; padding: 6px 9px;
+    box-shadow: none; font-size: 12.5px;
+  }
+  #toolbar .menu-trigger:hover,
+  #toolbar .menu.open > .menu-trigger {
+    background: var(--panel2); border-color: var(--border-soft);
+    color: var(--text-strong); transform: none;
+  }
+  #toolbar .menu-pop {
+    display: none; position: absolute; top: calc(100% + 8px); left: 0;
+    flex-direction: column; gap: 2px; min-width: 212px;
+    padding: 6px; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--border);
+    box-shadow: var(--shadow); z-index: 120;
+  }
+  #toolbar .menu.open > .menu-pop { display: flex; }
+  #toolbar .menu-pop button {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 8px 9px; border: none; border-radius: 7px;
+    background: transparent; color: var(--text);
+    font-size: 12.5px; font-family: inherit; text-align: left;
+    box-shadow: none; transform: none;
+  }
+  #toolbar .menu-pop button:hover:not(:disabled) {
+    background: var(--panel3); color: var(--text-strong); transform: none;
+  }
+  #toolbar .menu-pop button:disabled { opacity: .4; }
+  #toolbar .menu-pop button .ic { width: 15px; height: 15px; opacity: .8; }
+  #toolbar .menu-pop kbd {
+    margin-left: auto; padding: 1px 5px; border-radius: 4px;
+    background: var(--panel2); border: 1px solid var(--border-soft);
+    color: var(--muted); font: 10px/1.5 Consolas, monospace;
+    white-space: nowrap;
+  }
+  .menu-divider { height: 1px; margin: 5px 4px; background: var(--border-soft); }
+  .menu-field {
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 7px 9px; font-size: 11px; color: var(--muted);
+  }
+  #toolbar .menu-pop select {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 6px 8px; font-size: 12px;
+  }
+  .menu-hint { padding: 2px 9px 8px; font-size: 10.5px; line-height: 1.55; color: var(--muted); }
+  .toolbar-spacer { flex: 1 1 auto; min-width: 0; }
+
+  /* 状态栏里的皮卡丘标记 */
+  #statusbar > span:first-child::before {
+    content: ""; width: 16px; height: 16px; border-radius: 5px;
+    background-image: url('Pikachu_Mermaid.ico');
+    background-size: contain; background-repeat: no-repeat; background-position: center;
+    box-shadow: none;
+  }
+
+  /* AI 助手标题图标 */
+  .ai-title-row { display: flex; align-items: center; gap: 10px; padding-right: 54px; }
+  .ai-header .brand-icon { width: 34px; height: 34px; padding: 3px; border-radius: 10px; }
+  .ai-header p { margin-left: 44px; }
+
+  /* 空预览态 */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; min-height: 320px; padding: 30px; text-align: center;
+  }
+  .empty-state img {
+    width: 92px; height: 92px; padding: 10px; border-radius: 22px;
+    background: linear-gradient(135deg, #ffdf72, #ffb52e);
+    box-shadow: 0 12px 30px rgba(255, 181, 46, .25);
+    object-fit: contain;
+  }
+  .empty-state strong { font-size: 14px; font-weight: 700; color: inherit; }
+  .empty-state span { font-size: 12px; line-height: 1.7; opacity: .8; }
+
+  @media (max-width: 1100px) {
+    .brand-name { display: none; }
+    #toolbar { gap: 6px; padding: 0 8px; }
+  }
+  @media (max-width: 780px) {
+    #toolbar .menu-trigger { padding: 6px 7px; }
+    #toolbar .icon-btn { width: 28px; height: 28px; }
+    #toolbar .menu-pop { min-width: 190px; }
+  }
+
+  @media (max-width: 900px) {
+    #aiPanel { width: 100%; }
+    #toolbar .tb-label { display: none; }
+    #main { padding: 6px; gap: 6px; }
+  }
 </style>
 </head>
 <body>
 
+<svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-new" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M12 12v6M9 15h6"/></symbol>
+  <symbol id="ic-open" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="ic-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><path d="M8 14h8v6H8z"/></symbol>
+  <symbol id="ic-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+  <symbol id="ic-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></symbol>
+  <symbol id="ic-zoomout" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6"/></symbol>
+  <symbol id="ic-zoomin" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6M10.5 7.5v6"/></symbol>
+  <symbol id="ic-reset" viewBox="0 0 24 24"><path d="M4 11a8 8 0 1 1 2.3 6"/><path d="M4 5v6h6"/></symbol>
+  <symbol id="ic-full" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+  <symbol id="ic-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="ic-export" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+  <symbol id="ic-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="ic-spark" viewBox="0 0 24 24"><path d="M12 2l2.2 6.1L20 10l-5.8 1.9L12 18l-2.2-6.1L4 10l5.8-1.9z"/><path d="M19 16l.9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9z"/></symbol>
+  <symbol id="ic-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="ic-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="ic-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6a3 3 0 0 0 3-3 6 6 0 0 0-9-6z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
+  <symbol id="ic-doc" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h4M9 13h7M9 17h7"/></symbol>
+</svg>
+
   <div id="toolbar">
-    <button id="btnNew" title="新建标签页 (Alt+N)">新建</button>
-    <button id="btnOpen" title="打开 .mmd / .txt 文件 (Ctrl+O)">打开</button>
-    <button id="btnSave" title="保存 .mmd 文件 (Ctrl+S)">保存</button>
-    <span class="sep"></span>
-    <button id="btnUndo" title="撤销 (Ctrl+Z)" disabled>撤销</button>
-    <button id="btnRedo" title="重做 (Ctrl+Y)" disabled>重做</button>
-    <span class="sep"></span>
-    <span class="tb-label">模板:</span>
-    <select id="templateSelect"></select>
-    <button id="btnManageTemplates" title="管理模板（新增/编辑/删除/导入导出）">模板管理</button>
-    <span class="sep"></span>
-    <button id="btnZoomOut" title="缩小">−</button>
-    <button id="btnZoomReset" title="重置缩放">100%</button>
-    <button id="btnZoomIn" title="放大">+</button>
-    <span class="sep"></span>
-    <span class="tb-label">主题:</span>
-    <select id="themeSelect">
-      <option value="default">默认</option>
-      <option value="neutral">中性</option>
-      <option value="dark">暗色</option>
-      <option value="forest">森林</option>
-    </select>
-    <span class="sep"></span>
-    <button id="btnExportPng" title="导出 PNG 图片">导出 PNG</button>
-    <button id="btnExportSvg" title="导出 SVG 图片">导出 SVG</button>
-    <button id="btnExportPdf" title="导出 PDF（打开系统打印对话框，选择目标为 PDF 即可）">导出 PDF</button>
-    <select id="pngBgSelect" title="PNG 导出背景">
-      <option value="theme">PNG背景·主题</option>
-      <option value="white">PNG背景·白</option>
-      <option value="transparent">PNG背景·透明</option>
-    </select>
-    <span class="sep"></span>
-    <button id="btnCopyMd" title="复制 Mermaid 代码块（Markdown）">复制 Markdown</button>
-    <button id="btnCopySvg" title="复制 SVG 源码">复制 SVG</button>
-    <button id="btnExportMd" title="导出 Markdown 文件（含 Mermaid 代码块）">导出 Markdown</button>
-    <span class="sep"></span>
-    <button id="btnFullscreen" title="全屏预览 (Ctrl+Enter)">全屏</button>
+    <div class="brand">
+      <img class="brand-icon" src="Pikachu_Mermaid.ico" alt="Pikachu Mermaid 图标">
+      <span class="brand-name">Pikachu Mermaid</span>
+    </div>
+
+    <div class="quick-actions">
+      <button id="btnQuickNew" class="icon-btn" type="button" data-tip="新建标签页 (Alt+N)" title="新建标签页 (Alt+N)"><svg class="ic"><use href="#ic-new"></use></svg></button>
+      <button id="btnQuickOpen" class="icon-btn" type="button" data-tip="打开文件 (Ctrl+O)" title="打开文件 (Ctrl+O)"><svg class="ic"><use href="#ic-open"></use></svg></button>
+      <button id="btnQuickSave" class="icon-btn" type="button" data-tip="保存 (Ctrl+S)" title="保存 (Ctrl+S)"><svg class="ic"><use href="#ic-save"></use></svg></button>
+      <button id="btnAiPanel" type="button" title="打开 AI 助手 (Alt+K)"><svg class="ic"><use href="#ic-spark"></use></svg><span id="aiButtonLabel">AI 生成</span></button>
+    </div>
+
+    <div class="menu-bar">
+      <div class="menu">
+        <button class="menu-trigger" type="button" aria-expanded="false"><span>文件</span><svg class="ic ic-caret"><use href="#ic-chev"></use></svg></button>
+        <div class="menu-pop">
+          <button id="btnNew" type="button" title="新建标签页 (Alt+N)"><svg class="ic"><use href="#ic-new"></use></svg><span>新建标签页</span><kbd>Alt+N</kbd></button>
+          <button id="btnOpen" type="button" title="打开 .mmd / .txt 文件 (Ctrl+O)"><svg class="ic"><use href="#ic-open"></use></svg><span>打开文件</span><kbd>Ctrl+O</kbd></button>
+          <button id="btnSave" type="button" title="保存 .mmd 文件 (Ctrl+S)"><svg class="ic"><use href="#ic-save"></use></svg><span>保存</span><kbd>Ctrl+S</kbd></button>
+          <button id="btnSaveAs" type="button" title="换一个文件名保存"><svg class="ic"><use href="#ic-copy"></use></svg><span>另存为…</span></button>
+          <div class="menu-divider"></div>
+          <button id="btnExportMd" type="button" title="导出 Markdown 文件（含 Mermaid 代码块）"><svg class="ic"><use href="#ic-doc"></use></svg><span>导出 Markdown</span></button>
+        </div>
+      </div>
+
+      <div class="menu">
+        <button class="menu-trigger" type="button" aria-expanded="false"><span>编辑</span><svg class="ic ic-caret"><use href="#ic-chev"></use></svg></button>
+        <div class="menu-pop">
+          <button id="btnUndo" type="button" title="撤销 (Ctrl+Z)" disabled><svg class="ic"><use href="#ic-undo"></use></svg><span>撤销</span><kbd>Ctrl+Z</kbd></button>
+          <button id="btnRedo" type="button" title="重做 (Ctrl+Y)" disabled><svg class="ic"><use href="#ic-redo"></use></svg><span>重做</span><kbd>Ctrl+Y</kbd></button>
+          <div class="menu-divider"></div>
+          <label class="menu-field"><span>双击标签可重命名</span></label>
+        </div>
+      </div>
+
+      <div class="menu">
+        <button class="menu-trigger" type="button" aria-expanded="false"><span>视图</span><svg class="ic ic-caret"><use href="#ic-chev"></use></svg></button>
+        <div class="menu-pop">
+          <button id="btnZoomOut" type="button" title="缩小"><svg class="ic"><use href="#ic-zoomout"></use></svg><span>缩小</span></button>
+          <button id="btnZoomReset" type="button" title="重置缩放"><svg class="ic"><use href="#ic-reset"></use></svg><span>重置缩放</span><kbd id="zoomMenuLabel">100%</kbd></button>
+          <button id="btnZoomIn" type="button" title="放大"><svg class="ic"><use href="#ic-zoomin"></use></svg><span>放大</span></button>
+          <div class="menu-divider"></div>
+          <button id="btnFullscreen" type="button" title="全屏预览 (Ctrl+Enter)"><svg class="ic"><use href="#ic-full"></use></svg><span id="fullscreenLabel">全屏预览</span><kbd>Ctrl+↵</kbd></button>
+          <button id="btnUiTheme" type="button" title="切换界面外观（浅色 / 深色）"><svg class="ic"><use href="#ic-theme"></use></svg><span id="uiThemeLabel">浅色外观</span></button>
+        </div>
+      </div>
+
+      <div class="menu">
+        <button class="menu-trigger" type="button" aria-expanded="false"><span>模板</span><svg class="ic ic-caret"><use href="#ic-chev"></use></svg></button>
+        <div class="menu-pop">
+          <label class="menu-field"><span>选择模板</span><select id="templateSelect"></select></label>
+          <button id="btnManageTemplates" type="button" title="管理模板（新增/编辑/删除/导入导出）"><svg class="ic"><use href="#ic-grid"></use></svg><span>管理模板…</span></button>
+        </div>
+      </div>
+
+      <div class="menu">
+        <button class="menu-trigger" type="button" aria-expanded="false"><span>导出</span><svg class="ic ic-caret"><use href="#ic-chev"></use></svg></button>
+        <div class="menu-pop">
+          <button id="btnExportPng" type="button" title="导出 PNG 图片"><svg class="ic"><use href="#ic-export"></use></svg><span>导出 PNG</span></button>
+          <button id="btnExportSvg" type="button" title="导出 SVG 图片"><svg class="ic"><use href="#ic-export"></use></svg><span>导出 SVG</span></button>
+          <button id="btnExportPdf" type="button" title="导出 PDF（系统打印对话框）"><svg class="ic"><use href="#ic-doc"></use></svg><span>导出 PDF</span></button>
+          <label class="menu-field"><span>PNG 背景</span><select id="pngBgSelect" title="PNG 导出背景"><option value="theme">跟随主题</option><option value="white">白色</option><option value="transparent">透明</option></select></label>
+          <div class="menu-divider"></div>
+          <button id="btnCopyMd" type="button" title="复制 Mermaid 代码块（Markdown）"><svg class="ic"><use href="#ic-copy"></use></svg><span>复制 Markdown</span></button>
+          <button id="btnCopySvg" type="button" title="复制 SVG 源码"><svg class="ic"><use href="#ic-copy"></use></svg><span>复制 SVG</span></button>
+        </div>
+      </div>
+
+      <div class="menu">
+        <button class="menu-trigger" type="button" aria-expanded="false"><span>图表主题</span><svg class="ic ic-caret"><use href="#ic-chev"></use></svg></button>
+        <div class="menu-pop">
+          <label class="menu-field"><span>Mermaid 主题</span><select id="themeSelect"><option value="default">默认</option><option value="neutral">中性</option><option value="dark">暗色</option><option value="forest">森林</option></select></label>
+          <div class="menu-hint">仅影响图表渲染，与界面外观相互独立。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar-spacer"></div>
   </div>
 
   <!-- 多文件标签栏 -->
@@ -393,7 +870,7 @@
         <span>实时预览</span>
         <span id="chartTypeTag">未检测</span>
       </div>
-      <div id="previewScroll">
+      <div id="previewScroll" tabindex="-1">
         <div id="outlinePanel" hidden>
           <div class="outline-title">大纲</div>
           <div id="outlineList"></div>
@@ -437,12 +914,78 @@
     </div>
   </div>
 
+  <!-- AI 助手抽屉 -->
+  <div id="aiScrim"></div>
+  <aside id="aiPanel" aria-label="AI 生成图表">
+    <div class="ai-header">
+      <div class="ai-title-row">
+        <img class="brand-icon" src="Pikachu_Mermaid.ico" alt="">
+        <h2>AI 生成图表</h2>
+      </div>
+      <p>用自然语言描述需求，生成可编辑的 Mermaid 代码</p>
+      <button id="aiClose" class="ai-btn ghost" title="关闭助手 (Esc)">关闭</button>
+    </div>
+    <div class="ai-body">
+      <div class="ai-section">
+        <div class="ai-label"><span>服务商</span><span id="aiPresetNote">预设</span></div>
+        <select id="aiProvider" class="ai-select">
+          <option value="local">本地代理（推荐）</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="qwen">通义千问 · DashScope</option>
+          <option value="glm">智谱 GLM</option>
+          <option value="kimi">Kimi · Moonshot</option>
+          <option value="openai">OpenAI</option>
+          <option value="custom">自定义接口</option>
+        </select>
+      </div>
+      <div class="ai-section">
+        <div class="ai-label"><span>模型</span><button id="aiResetEndpoint" class="ai-btn ghost" title="恢复当前预设的地址与模型">恢复预设</button></div>
+        <input id="aiModel" class="ai-input ai-code" type="text" spellcheck="false" placeholder="模型名称">
+      </div>
+      <div class="ai-section">
+        <div class="ai-label"><span>接口地址</span><span>OpenAI 兼容</span></div>
+        <input id="aiEndpoint" class="ai-input ai-code" type="text" spellcheck="false" placeholder="https://.../chat/completions">
+      </div>
+      <div class="ai-section">
+        <div class="ai-label"><span>API Key</span><label class="ai-label ai-check"><input id="aiRemember" type="checkbox"> 记住</label></div>
+        <input id="aiKey" class="ai-input ai-code" type="password" autocomplete="off" placeholder="本地代理无需填写">
+        <div class="ai-hint" id="aiKeyHint">密钥仅保留在本会话；勾选“记住”后会明文写入本机 localStorage。</div>
+      </div>
+      <div class="ai-section">
+        <div class="ai-label"><span>你的需求</span><button id="aiExample" class="ai-btn ghost" title="填入示例提示词">填入示例</button></div>
+        <textarea id="aiPrompt" class="ai-textarea" spellcheck="false" placeholder="例如：画出用户注册流程，包含校验失败与验证码错误分支"></textarea>
+      </div>
+      <div class="ai-row">
+        <button id="aiGenerate" class="ai-btn primary" style="flex:1">生成图表</button>
+        <button id="aiCancel" class="ai-btn" disabled>取消</button>
+      </div>
+      <div class="ai-section">
+        <div class="ai-label"><span>生成结果</span><span id="aiStatus">等待生成</span></div>
+        <div id="aiResult" class="placeholder">生成后可在此查看 Mermaid 代码，并一键应用或插入编辑器。</div>
+        <div class="ai-row">
+          <button id="aiApply" class="ai-btn" disabled>替换编辑器</button>
+          <button id="aiInsert" class="ai-btn" disabled>插入光标处</button>
+          <button id="aiCopy" class="ai-btn" disabled>复制代码</button>
+        </div>
+      </div>
+      <div class="ai-section">
+        <div class="ai-label"><span>最近生成</span><button id="aiClearHistory" class="ai-btn ghost">清空</button></div>
+        <div id="aiHistory"></div>
+      </div>
+      <details class="ai-section">
+        <summary class="ai-label">系统提示词（高级）</summary>
+        <textarea id="aiSystemPrompt" class="ai-textarea ai-code" spellcheck="false"></textarea>
+        <div class="ai-hint">默认要求模型只输出 Mermaid 代码。可在此调整图表风格、命名语言等约束。</div>
+      </details>
+    </div>
+  </aside>
+
 <script src="mermaid.min.js"></script>
 <script>
 "use strict";
 
 // 应用版本号：改动本文件时同步 package.json 与 README 的版本号
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.3.2";
 
 /* =====================================================================
  * 模板（从原 templates/templates.json 迁移，内嵌避免 file:// 下 fetch 受限）
@@ -510,7 +1053,11 @@ function refreshTemplateSelect(keepValue) {
 function applyTemplate(idx) {
   const t = templates[idx];
   if (!t) return;
-  if (isDirty() && !confirm("切换模板将覆盖当前内容，确定吗？")) return;
+  if (isDirty() && !confirm("切换模板将覆盖当前内容，确定吗？")) {
+    // 原生 select 的值已经变了：取消时必须还原，否则下拉框显示 A、编辑器里却是 B
+    templateSelect.value = prevTemplateValue;
+    return;
+  }
   prevTemplateValue = String(idx);
   editor.value = t.code;
   history.reset();
@@ -833,6 +1380,17 @@ function refreshTabs() {
     close.addEventListener("click", (e) => { e.stopPropagation(); closeDoc(doc.id); });
     tab.appendChild(close);
     tab.addEventListener("click", () => loadDoc(doc));
+    tab.title = "单击切换 · 双击重命名";
+    tab.addEventListener("dblclick", (e) => {
+      if (e.target.classList.contains("tclose")) return;
+      const next = prompt("重命名标签", doc.name);
+      if (next === null) return;
+      const name = String(next).trim();
+      if (!name) return;
+      doc.name = name;
+      refreshTabs();
+      writeDraft();
+    });
     tabList.appendChild(tab);
   });
 }
@@ -844,10 +1402,19 @@ function closeDoc(id) {
   if (docIsDirty(doc) && !confirm("「" + doc.name + "」未保存，确定关闭吗？")) return;
   docs = docs.filter(d => d.id !== id);
   if (docs.length === 0) {
-    const d = createDoc(templates[0].code, null);
+    // 不能走 loadDoc：那会先 snapshotActiveDoc()，而此时编辑器里还是刚关闭的旧内容，
+    // 会把旧正文/文件名/撤销栈串进新文档。按 newDoc() 的方式直接初始化干净文档。
+    const tpl = templates[0] || DEFAULT_TEMPLATES[0];
+    const d = createDoc(tpl.code, null);
     activeDocId = d.id;
-    loadDoc(d);
+    editor.value = d.text;
+    history.reset();
+    currentFile = null;
+    currentContent = d.text;
     markSaved();
+    syncEditorUI();
+    writeDraft();
+    refreshTabs();
     return;
   }
   if (id === activeDocId) {
@@ -861,7 +1428,8 @@ function closeDoc(id) {
 function newDoc() {
   const existing = getActiveDoc();
   if (existing) snapshotActiveDoc();
-  const d = createDoc(templates[0].code, null);   // 名称由 createDoc 按 id 生成，保证唯一
+  const tpl = templates[0] || DEFAULT_TEMPLATES[0];
+  const d = createDoc(tpl.code, null);   // 名称由 createDoc 按 id 生成，保证唯一
   activeDocId = d.id;
   editor.value = d.text;
   history.reset();
@@ -957,13 +1525,33 @@ function debouncedPreview() {
   clearTimeout(renderTimer);
   renderTimer = setTimeout(renderPreview, 200);
 }
+/* 等待正在进行的渲染和排队中的防抖渲染都结束。
+ * PDF 导出必须在最新图上打印，不能直接用 renderPreview()——它在 isRendering 时会立即返回。 */
+async function waitForRenderIdle() {
+  let guard = 0;
+  while ((isRendering || renderTimer) && guard++ < 100) {
+    await new Promise(r => setTimeout(r, 40));
+  }
+}
 
 async function renderPreview() {
   const code = editor.value;
   if (isRendering) { debouncedPreview(); return; }
+  // 由防抖定时器触发时清掉句柄，waitForRenderIdle() 才能判断队列已排空
+  if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
   applyThemeSkin();
   if (!code.trim()) {
-    previewContainer.innerHTML = "";
+    const skin = THEME_SKIN[$("themeSelect").value] || THEME_SKIN.default;
+    previewContainer.innerHTML =
+      '<div class="empty-state">' +
+      '<img src="Pikachu_Mermaid.ico" alt="">' +
+      '<strong>等待绘图指令</strong>' +
+      '<span>在左侧输入 Mermaid 代码，或点「AI 生成」用一句话描述你的图表。</span>' +
+      '</div>';
+    previewContainer.firstChild.style.color = skin.outlineText;
+    // 清空内容时一并收掉旧大纲和旧错误行，否则会留下指向不存在行号的条目/波浪线
+    renderOutline("");
+    if (lastErrorLine !== null) { lastErrorLine = null; highlightEditor(); }
     $("renderState").textContent = "就绪";
     $("chartTypeTag").textContent = "空";
     return;
@@ -1105,9 +1693,11 @@ $("fileInput").addEventListener("change", async (e) => {
   if (!file) return;
   try {
     const buf = await file.arrayBuffer();
-    let text = new TextDecoder("utf-8").decode(buf);
-    // UTF-8 解码出现替换符 → 尝试 GBK
-    if (text.indexOf("\uFFFD") !== -1) {
+    // 用 fatal 模式判断 UTF-8 是否真的非法；合法正文里含 U+FFFD 时不应误判成 GBK
+    let text;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } catch (e) {
       text = new TextDecoder("gbk").decode(buf);
     }
     // 打开文件 → 新标签页
@@ -1117,14 +1707,53 @@ $("fileInput").addEventListener("change", async (e) => {
     alert("打开文件失败：" + err);
   }
 });
-$("btnSave").addEventListener("click", saveFile);
+$("btnSave").addEventListener("click", () => saveFile(false));
+$("btnSaveAs").addEventListener("click", () => saveFile(true));
+$("btnQuickSave").addEventListener("click", () => saveFile(false));
+$("btnQuickNew").addEventListener("click", () => $("btnNew").click());
+$("btnQuickOpen").addEventListener("click", () => $("btnOpen").click());
+
+/* ── 下拉菜单：点触发器开合，点外部/Esc/选中项自动收起 ── */
+function closeMenus(except) {
+  document.querySelectorAll("#toolbar .menu.open").forEach((menu) => {
+    if (menu === except) return;
+    menu.classList.remove("open");
+    const trigger = menu.querySelector(".menu-trigger");
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+  });
+}
+document.querySelectorAll("#toolbar .menu").forEach((menu) => {
+  const trigger = menu.querySelector(".menu-trigger");
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = !menu.classList.contains("open");
+    closeMenus(menu);
+    menu.classList.toggle("open", open);
+    trigger.setAttribute("aria-expanded", String(open));
+  });
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest || !e.target.closest("#toolbar .menu")) closeMenus();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
+// 按钮点选后立即收起；select 必须等 change 才收起，否则一点选择框菜单就消失，无法选选项
+document.querySelectorAll("#toolbar .menu-pop button").forEach((el) => {
+  el.addEventListener("click", () => closeMenus());
+});
+document.querySelectorAll("#toolbar .menu-pop select").forEach((el) => {
+  el.addEventListener("change", () => closeMenus());
+});
 
 let lastSaveName = null;        // 记住上次保存名，避免每次都从「未命名.mmd」开始
-function saveFile() {
-  let name = prompt("保存为（.mmd）", currentFile || lastSaveName || "未命名.mmd");
-  if (name === null) return;
-  name = String(name).trim();
-  if (!name) return;
+/* forcePrompt=true 走「另存为」；普通 Ctrl+S 对已有文件名直接保存，少一次弹窗。 */
+function saveFile(forcePrompt) {
+  let name = currentFile || "";
+  if (!name || forcePrompt) {
+    name = prompt("保存为（.mmd）", name || lastSaveName || "未命名.mmd");
+    if (name === null) return;
+    name = String(name).trim();
+    if (!name) return;
+  }
   if (!/\.[^./\\]+$/.test(name)) name += ".mmd";   // 没写扩展名时自动补
   const blob = new Blob([editor.value], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -1192,14 +1821,14 @@ $("btnExportSvg").addEventListener("click", () => {
 /* =====================================================================
  * 导出 PDF（通过系统打印对话框，可选择"另存为 PDF"）
  * ===================================================================== */
-$("btnExportPdf").addEventListener("click", () => {
+$("btnExportPdf").addEventListener("click", async () => {
   if (!previewContainer.querySelector("svg")) { alert("预览区为空，无法导出"); return; }
   if (!confirm("将打开系统打印对话框，请选择目标为「另存为 PDF」。打印内容仅包含图表预览区。\n\n继续？")) return;
-  // 打印前先确保预览已渲染为当前内容
-  renderPreview().then(() => {
-    // 临时保持当前缩放，打印样式 @media print 会自动适配页面宽度
-    window.print();
-  });
+  // 等渲染队列排空后再渲染一次，避免打印上一张图或错误横幅
+  await waitForRenderIdle();
+  await renderPreview();
+  // 临时保持当前缩放，打印样式 @media print 会自动适配页面宽度
+  window.print();
 });
 
 /* =====================================================================
@@ -1217,7 +1846,7 @@ async function copyText(text, label) {
     document.body.appendChild(ta);
     ta.select();
     try {
-      document.execCommand("copy");
+      if (!document.execCommand("copy")) throw new Error("execCommand returned false");
     } catch (e2) {
       document.body.removeChild(ta);
       alert("复制失败，请手动复制");
@@ -1295,7 +1924,11 @@ $("btnExportPng").addEventListener("click", () => {
 $("btnZoomIn").addEventListener("click", () => { zoom = Math.min(4, +(zoom * 1.2).toFixed(3)); syncZoomBtn(); applyZoom(); });
 $("btnZoomOut").addEventListener("click", () => { zoom = Math.max(0.2, +(zoom / 1.2).toFixed(3)); syncZoomBtn(); applyZoom(); });
 $("btnZoomReset").addEventListener("click", () => { zoom = 1; syncZoomBtn(); applyZoom(); });
-function syncZoomBtn() { $("btnZoomReset").textContent = Math.round(zoom * 100) + "%"; }
+function syncZoomBtn() {
+  const pct = Math.round(zoom * 100) + "%";
+  $("zoomMenuLabel").textContent = pct;
+  $("btnZoomReset").title = "重置缩放（当前 " + pct + "）";
+}
 function zoomBy(factor) {
   zoom = Math.max(0.2, Math.min(4, +(zoom * factor).toFixed(3)));
   syncZoomBtn();
@@ -1308,7 +1941,7 @@ function zoomBy(factor) {
 $("btnFullscreen").addEventListener("click", toggleFullscreen);
 function toggleFullscreen() {
   const full = document.body.classList.toggle("fullscreen");
-  $("btnFullscreen").textContent = full ? "退出全屏" : "全屏";
+  $("fullscreenLabel").textContent = full ? "退出全屏" : "全屏预览";
   $("btnFullscreen").title = full ? "退出全屏 (Ctrl+Enter)" : "全屏预览 (Ctrl+Enter)";
   if (full) previewScroll.focus();
 }
@@ -1427,8 +2060,8 @@ $("tmplImportFile").addEventListener("change", async (e) => {
   if (!file) return;
   try {
     const arr = JSON.parse(await file.text());
-    if (!Array.isArray(arr) || !arr.every(t => t && typeof t.name === "string" && typeof t.code === "string")) {
-      throw new Error("格式不正确");
+    if (!Array.isArray(arr) || !arr.length || !arr.every(t => t && typeof t.name === "string" && typeof t.code === "string")) {
+      throw new Error("格式不正确：至少需要 1 个模板");
     }
     templates = arr;
     saveTemplates();
@@ -1482,13 +2115,21 @@ editor.addEventListener("keydown", (e) => {
     syncEditorUI();      // setRangeText 不触发 input，手动收口 UI
     return;
   }
-  if (e.key === "s" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveFile(); return; }
-  if (e.key === "o" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnOpen").click(); return; }
-  // Ctrl+N / Cmd+N 是浏览器保留快捷键（新建窗口），preventDefault 拦不住，改用 Alt+N
-  if (e.key === "n" && e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); $("btnNew").click(); return; }
-  if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); history.undo(); return; }
-  if ((e.key === "y" || (e.key === "z" && e.shiftKey)) && (e.ctrlKey || e.metaKey)) { e.preventDefault(); history.redo(); return; }
-  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); toggleFullscreen(); return; }
+  // 文件/撤销/全屏快捷键已提升到 document 级：焦点在预览、菜单或状态栏时同样可用
+});
+/* 全局快捷键。用 toLowerCase 比较以兼容 CapsLock / Ctrl+Shift+Z 的大写 Z。 */
+document.addEventListener("keydown", (e) => {
+  const k = (e.key || "").toLowerCase();
+  const mod = e.ctrlKey || e.metaKey;
+  const target = e.target;
+  const typingElsewhere = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) && target !== editor;
+  if (mod && k === "s") { e.preventDefault(); saveFile(); return; }
+  if (mod && k === "o") { e.preventDefault(); $("btnOpen").click(); return; }
+  // Ctrl+N 是浏览器保留快捷键（新建窗口），网页拦不住，改用 Alt+N
+  if (e.altKey && !mod && k === "n") { e.preventDefault(); $("btnNew").click(); return; }
+  if (mod && !typingElsewhere && k === "z" && !e.shiftKey) { e.preventDefault(); history.undo(); return; }
+  if (mod && !typingElsewhere && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); history.redo(); return; }
+  if (mod && k === "enter") { e.preventDefault(); toggleFullscreen(); }
 });
 /* Ctrl+滚轮缩放（编辑器内也可） */
 editor.addEventListener("wheel", (e) => {
@@ -1570,6 +2211,389 @@ window.addEventListener("beforeunload", (e) => {
 });
 
 /* =====================================================================
+ * AI 生成图表（OpenAI 兼容 Chat Completions + SSE 流式）
+ * 设计原则：预设只给地址/模型，密钥永不写死在代码里；跨域或密钥暴露
+ * 顾虑走 tools/ai_proxy.py 本地代理（同源 /api/chat）。
+ * ===================================================================== */
+const AI_PRESETS = {
+  local: {
+    endpoint: "/api/chat", model: "deepseek-flash",
+    note: "密钥留在本地代理，不进浏览器",
+  },
+  deepseek: {
+    endpoint: "https://api.deepseek.com/chat/completions", model: "deepseek-flash",
+    note: "模型名可改：deepseek-v4-pro",
+  },
+  qwen: {
+    endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", model: "qwen-plus",
+    note: "专属地域空间需替换为 WorkspaceId 域名",
+  },
+  glm: {
+    endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions", model: "glm-4.5-flash",
+    note: "glm-4.5-flash 为免费模型",
+  },
+  kimi: {
+    endpoint: "https://api.moonshot.cn/v1/chat/completions", model: "kimi-k3",
+    note: "模型名可改：kimi-k2.6",
+  },
+  openai: {
+    endpoint: "https://api.openai.com/v1/chat/completions", model: "gpt-5.4-mini",
+    note: "Chat Completions 仍可用；也可改 Responses 兼容代理",
+  },
+  custom: { endpoint: "", model: "", note: "任意 OpenAI 兼容 /chat/completions 端点" },
+};
+const AI_CONFIG_KEY = "pikachu_mermaid_ai_config_v1";
+const AI_HISTORY_KEY = "pikachu_mermaid_ai_history_v1";
+const AI_DEFAULT_SYSTEM = [
+  "你是一名 Mermaid 图表专家。根据用户描述，只输出可直接运行的 Mermaid 代码。",
+  "要求：1) 第一行必须是图表类型声明，如 flowchart TD、sequenceDiagram、mindmap；",
+  "2) 只输出代码本身，不要解释、不要 Markdown 代码块标记、不要寒暄；",
+  "3) 标签沿用用户描述中的语言，中文标签用方括号包裹；",
+  "4) 结构清晰，必要时用 subgraph 分组，避免语法错误。",
+].join("\n");
+
+let aiConfig = loadAiConfig();
+let aiHistory = loadAiHistory();
+let aiController = null;
+let aiLastCode = "";
+let aiLastPrompt = "";
+
+function loadAiConfig() {
+  const fallback = {
+    provider: "local", endpoint: AI_PRESETS.local.endpoint,
+    model: AI_PRESETS.local.model, remember: false, key: "", system: AI_DEFAULT_SYSTEM,
+  };
+  try {
+    const raw = JSON.parse(localStorage.getItem(AI_CONFIG_KEY) || "null");
+    if (!raw || typeof raw !== "object") return fallback;
+    const provider = AI_PRESETS[raw.provider] ? raw.provider : "local";
+    const preset = AI_PRESETS[provider];
+    return {
+      provider,
+      endpoint: typeof raw.endpoint === "string" && raw.endpoint ? raw.endpoint : preset.endpoint,
+      model: typeof raw.model === "string" && raw.model ? raw.model : preset.model,
+      remember: !!raw.remember,
+      key: raw.remember && typeof raw.key === "string" ? raw.key : "",
+      system: typeof raw.system === "string" && raw.system.trim() ? raw.system : AI_DEFAULT_SYSTEM,
+    };
+  } catch (e) { return fallback; }
+}
+function saveAiConfig() {
+  const payload = {
+    provider: aiConfig.provider, endpoint: aiConfig.endpoint, model: aiConfig.model,
+    remember: aiConfig.remember, key: aiConfig.remember ? aiConfig.key : "", system: aiConfig.system,
+  };
+  try { localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(payload)); } catch (e) {}
+  $("aiKeyHint").textContent = aiConfig.remember
+    ? "密钥已明文保存在本机 localStorage。公共设备请勿勾选「记住」。"
+    : "密钥仅保留在本会话，刷新页面后需要重新输入。";
+}
+function loadAiHistory() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(AI_HISTORY_KEY) || "[]");
+    return Array.isArray(arr) ? arr.filter(x => x && typeof x.q === "string" && typeof x.code === "string").slice(0, 20) : [];
+  } catch (e) { return []; }
+}
+function saveAiHistory() {
+  try { localStorage.setItem(AI_HISTORY_KEY, JSON.stringify(aiHistory)); } catch (e) {}
+}
+function renderAiHistory() {
+  const box = $("aiHistory");
+  box.innerHTML = "";
+  aiHistory.forEach((item, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "ai-history-item";
+    chip.textContent = item.q;
+    chip.title = "点击载入这次生成的代码";
+    chip.addEventListener("click", () => {
+      aiLastCode = item.code;
+      aiLastPrompt = item.q;
+      setAiResult(item.code);
+      $("aiStatus").textContent = "已从历史载入";
+      $("aiApply").disabled = false;
+      $("aiInsert").disabled = false;
+      $("aiCopy").disabled = false;
+    });
+    box.appendChild(chip);
+  });
+}
+function setAiResult(text, placeholder) {
+  const el = $("aiResult");
+  el.textContent = text || " ";
+  el.classList.toggle("placeholder", !!placeholder);
+  el.scrollTop = el.scrollHeight;
+}
+function toggleAiPanel(force) {
+  const open = typeof force === "boolean" ? force : !$("aiPanel").classList.contains("open");
+  $("aiPanel").classList.toggle("open", open);
+  $("aiScrim").classList.toggle("show", open);
+  if (open) setTimeout(() => $("aiPrompt").focus(), 280);
+  syncAiButton();
+}
+/* AI 工具栏按钮是单一入口：未打开→打开；已打开且无描述→聚焦输入；
+ * 已打开且有描述→直接生成；生成中→取消。 */
+function syncAiButton() {
+  const label = $("aiButtonLabel");
+  const btn = $("btnAiPanel");
+  if (aiController) {
+    label.textContent = "取消生成";
+    btn.title = "取消当前生成请求";
+  } else if ($("aiPanel").classList.contains("open") && $("aiPrompt").value.trim()) {
+    label.textContent = "立即生成";
+    btn.title = "用当前描述生成图表 (Alt+K)";
+  } else {
+    label.textContent = "AI 生成";
+    btn.title = "打开 AI 助手 (Alt+K)";
+  }
+}
+function handleAiButton() {
+  if (aiController) { aiController.abort(); return; }
+  if (!$("aiPanel").classList.contains("open")) { toggleAiPanel(true); return; }
+  if (!$("aiPrompt").value.trim()) { $("aiPrompt").focus(); syncAiButton(); return; }
+  aiGenerate();
+}
+function resetAiPreset() {
+  const name = $("aiProvider").value;
+  const preset = AI_PRESETS[name] || AI_PRESETS.local;
+  aiConfig.provider = name;
+  if (name !== "custom") {
+    aiConfig.endpoint = preset.endpoint;
+    aiConfig.model = preset.model;
+  }
+  $("aiEndpoint").value = aiConfig.endpoint;
+  $("aiModel").value = aiConfig.model;
+  $("aiPresetNote").textContent = preset.note;
+  $("aiKey").placeholder = name === "local" ? "本地代理无需填写" : "sk-...";
+  saveAiConfig();
+}
+/* 从模型原始输出里提取纯 Mermaid 代码：优先 fenced code block，
+ * 否则从第一行图表声明开始截取，避免把模型寒暄写进编辑器。 */
+function extractMermaidCode(raw) {
+  let text = String(raw || "").trim();
+  if (!text) return { code: "", valid: false, type: "空" };
+  const fence = text.match(/```(?:mermaid|mmd)?\s*\n([\s\S]*?)```/i);
+  if (fence) {
+    text = fence[1].trim();
+  } else {
+    const lines = text.split("\n");
+    const start = lines.findIndex(l =>
+      /^\s*(?:graph|flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram|pie|mindmap|quadrantChart|radar|timeline|gitGraph|journey|erDiagram|xychart|block-beta|sankey-beta)\b/.test(l)
+    );
+    if (start > 0) text = lines.slice(start).join("\n");
+  }
+  const code = text.replace(/^\s*\n+/, "").replace(/\n+\s*$/, "") + "\n";
+  const type = detectChartType(code);
+  return { code, valid: type !== "空" && type !== "未知", type };
+}
+function contentFromChunk(data) {
+  const choice = data && data.choices && data.choices[0];
+  if (!choice) return "";
+  if (choice.delta && choice.delta.content) return choice.delta.content;
+  if (choice.message && choice.message.content) return choice.message.content;
+  return "";
+}
+function friendlyAiError(err) {
+  const msg = String(err && err.message || err);
+  if (/Failed to fetch|NetworkError|Load failed|TypeError/i.test(msg)) {
+    return "请求未送达或被浏览器拦截。常见原因：地址错误、服务商不允许跨域、本地代理未启动。\n建议：运行 python tools/ai_proxy.py 并选择「本地代理」预设。";
+  }
+  if (/401|403|Unauthorized|invalid_api_key/i.test(msg)) return "认证失败：请检查 API Key 是否正确或已过期。";
+  if (/429|rate limit|quota/i.test(msg)) return "触发限流或额度不足，请稍后重试或更换模型。";
+  if (/HTTP 5\d\d/i.test(msg)) return "服务商暂时不可用（5xx），请稍后重试。";
+  return msg;
+}
+function pushAiHistory(q, code) {
+  aiHistory.unshift({ q, code, at: Date.now() });
+  aiHistory = aiHistory.slice(0, 20);
+  saveAiHistory();
+  renderAiHistory();
+}
+async function aiGenerate() {
+  if (aiController) { aiController.abort(); return; }
+  const prompt = $("aiPrompt").value.trim();
+  if (!prompt) { alert("请先描述你想生成的图表"); $("aiPrompt").focus(); return; }
+  const endpoint = $("aiEndpoint").value.trim();
+  if (!endpoint) { alert("请填写接口地址，或选择「本地代理」预设"); return; }
+  const model = $("aiModel").value.trim();
+  const key = $("aiKey").value.trim();
+  aiConfig.endpoint = endpoint;
+  aiConfig.model = model;
+  aiConfig.key = key;
+  aiConfig.system = $("aiSystemPrompt").value.trim() || AI_DEFAULT_SYSTEM;
+  aiConfig.remember = $("aiRemember").checked;
+  saveAiConfig();
+
+  aiLastPrompt = prompt;
+  aiLastCode = "";
+  setAiResult("正在请求 " + (model || "默认模型") + " …", true);
+  $("aiStatus").textContent = "生成中…";
+  $("aiGenerate").disabled = true;
+  $("aiCancel").disabled = false;
+  ["aiApply", "aiInsert", "aiCopy"].forEach((id) => { $(id).disabled = true; });
+
+  aiController = new AbortController();
+  syncAiButton();
+  const headers = { "Content-Type": "application/json" };
+  if (key) headers.Authorization = "Bearer " + key;
+  const payload = {
+    model,
+    messages: [
+      { role: "system", content: aiConfig.system },
+      { role: "user", content: prompt },
+    ],
+    stream: true,
+    temperature: 0.3,
+  };
+  try {
+    const resp = await fetch(endpoint, {
+      method: "POST", headers, body: JSON.stringify(payload), signal: aiController.signal,
+    });
+    if (!resp.ok) {
+      let detail = "";
+      try {
+        const data = await resp.json();
+        detail = (data.error && (data.error.message || data.error.type)) || data.message || "";
+      } catch (e) {}
+      throw new Error("HTTP " + resp.status + (detail ? " · " + detail : ""));
+    }
+    let raw = "";
+    if (resp.body && resp.body.getReader) {
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buf = "", fullText = "";
+      const takeData = (line) => {
+        const text = line.trim();
+        if (!text.startsWith("data:")) return;
+        const data = text.slice(5).trim();
+        if (!data || data === "[DONE]") return;
+        try { raw += contentFromChunk(JSON.parse(data)); } catch (e) { /* 心跳/非 JSON 行忽略 */ }
+      };
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        const decoded = decoder.decode(chunk.value, { stream: true });
+        fullText += decoded;
+        buf += decoded;
+        let nl;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          takeData(buf.slice(0, nl));
+          buf = buf.slice(nl + 1);
+        }
+        if (raw) setAiResult(raw);
+      }
+      // 末尾没有换行的最后一帧 SSE
+      if (buf.trim()) takeData(buf);
+      // 不支持 SSE 的兼容端点：即使返回多行、带结尾换行的 JSON 也能兜底解析
+      if (!raw) {
+        const candidate = fullText.trim();
+        if (candidate.startsWith("{")) {
+          try { raw = contentFromChunk(JSON.parse(candidate)); } catch (e) {}
+        }
+      }
+    } else {
+      raw = contentFromChunk(await resp.json());
+    }
+    if (!raw.trim()) throw new Error("模型返回内容为空（可能是 thinking 模型未输出正文）");
+    const result = extractMermaidCode(raw);
+    aiLastCode = result.code;
+    setAiResult(result.code);
+    $("aiStatus").textContent = result.valid ? ("已生成 · " + result.type) : "已生成 · 语法待确认";
+    ["aiApply", "aiInsert", "aiCopy"].forEach((id) => { $(id).disabled = false; });
+    pushAiHistory(aiLastPrompt, result.code);
+    $("renderState").textContent = "AI 生成完成";
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      $("aiStatus").textContent = "已取消";
+      setAiResult("生成已取消。", true);
+    } else {
+      $("aiStatus").textContent = "生成失败";
+      setAiResult(friendlyAiError(err), true);
+    }
+  } finally {
+    aiController = null;
+    $("aiGenerate").disabled = false;
+    $("aiCancel").disabled = true;
+    syncAiButton();
+  }
+}
+
+/* ── AI 面板事件绑定 ── */
+$("btnAiPanel").addEventListener("click", handleAiButton);
+$("aiClose").addEventListener("click", () => toggleAiPanel(false));
+$("aiScrim").addEventListener("click", () => toggleAiPanel(false));
+$("aiGenerate").addEventListener("click", aiGenerate);
+$("aiCancel").addEventListener("click", () => { if (aiController) aiController.abort(); });
+$("aiPrompt").addEventListener("input", syncAiButton);
+$("aiPrompt").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); aiGenerate(); }
+});
+$("aiProvider").addEventListener("change", resetAiPreset);
+$("aiResetEndpoint").addEventListener("click", resetAiPreset);
+$("aiRemember").addEventListener("change", () => {
+  aiConfig.remember = $("aiRemember").checked;
+  aiConfig.key = $("aiKey").value.trim();
+  saveAiConfig();
+});
+$("aiKey").addEventListener("change", () => { aiConfig.key = $("aiKey").value.trim(); saveAiConfig(); });
+$("aiExample").addEventListener("click", () => {
+  $("aiPrompt").value = "画一个用户注册流程图：填写信息 → 校验格式 → 发送验证码 → 注册成功；校验失败或验证码错误时回到填写信息。";
+  $("aiPrompt").focus();
+});
+$("aiClearHistory").addEventListener("click", () => {
+  if (!aiHistory.length) return;
+  if (!confirm("确定清空最近生成记录吗？")) return;
+  aiHistory = [];
+  saveAiHistory();
+  renderAiHistory();
+});
+$("aiApply").addEventListener("click", () => {
+  if (!aiLastCode) return;
+  if (isDirty() && !confirm("将用 AI 生成的代码替换当前编辑器内容，确定吗？")) return;
+  history.beforeEdit();
+  editor.value = aiLastCode;
+  history.afterEdit();
+  syncEditorUI();
+  editor.focus();
+  $("renderState").textContent = "已应用 AI 生成内容";
+});
+$("aiInsert").addEventListener("click", () => {
+  if (!aiLastCode) return;
+  history.beforeEdit();
+  const add = aiLastCode.endsWith("\n") ? aiLastCode : aiLastCode + "\n";
+  editor.setRangeText(add, editor.selectionStart, editor.selectionEnd, "end");
+  history.afterEdit();
+  syncEditorUI();
+  editor.focus();
+  $("renderState").textContent = "已插入 AI 生成内容";
+});
+$("aiCopy").addEventListener("click", () => { if (aiLastCode) copyText(aiLastCode, "AI 代码"); });
+
+/* ── 界面外观切换（与 mermaid 图表主题相互独立） ── */
+const UI_THEME_KEY = "pikachu_mermaid_ui_theme_v1";
+function setUiTheme(theme) {
+  const light = theme === "light";
+  document.body.dataset.ui = light ? "light" : "dark";
+  try { localStorage.setItem(UI_THEME_KEY, document.body.dataset.ui); } catch (e) {}
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", light ? "#f4f6fb" : "#0e1017");
+  $("uiThemeLabel").textContent = light ? "深色外观" : "浅色外观";
+  $("btnUiTheme").title = light ? "切换到深色外观" : "切换到浅色外观";
+}
+$("btnUiTheme").addEventListener("click", () => {
+  setUiTheme(document.body.dataset.ui === "light" ? "dark" : "light");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("aiPanel").classList.contains("open")) {
+    toggleAiPanel(false);
+    return;
+  }
+  if (e.key === "k" && e.altKey && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    toggleAiPanel();
+  }
+});
+
+/* =====================================================================
  * 初始化
  * ===================================================================== */
 (function init() {
@@ -1595,7 +2619,8 @@ window.addEventListener("beforeunload", (e) => {
     $("renderState").textContent = "已恢复上次未保存内容（" + docs.length + " 个标签）";
   } else {
     // 无草稿 → 新建初始文档（默认模板）
-    const d = createDoc(templates[0].code, null);
+    const tpl = templates[0] || DEFAULT_TEMPLATES[0];
+    const d = createDoc(tpl.code, null);
     activeDocId = d.id;
     editor.value = d.text;
     history.reset();
@@ -1630,6 +2655,23 @@ window.addEventListener("beforeunload", (e) => {
     }).catch(() => {});
   }
   $("appVersion").textContent = APP_VERSION;
+
+  // AI 助手与界面外观
+  let savedUi = "dark";
+  try { savedUi = localStorage.getItem(UI_THEME_KEY) || "dark"; } catch (e) {}
+  setUiTheme(savedUi === "light" ? "light" : "dark");
+  $("aiProvider").value = aiConfig.provider;
+  $("aiEndpoint").value = aiConfig.endpoint;
+  $("aiModel").value = aiConfig.model;
+  $("aiKey").value = aiConfig.key;
+  $("aiRemember").checked = aiConfig.remember;
+  $("aiSystemPrompt").value = aiConfig.system;
+  const aiPreset = AI_PRESETS[aiConfig.provider] || AI_PRESETS.local;
+  $("aiPresetNote").textContent = aiPreset.note;
+  $("aiKey").placeholder = aiConfig.provider === "local" ? "本地代理无需填写" : "sk-...";
+  saveAiConfig();
+  renderAiHistory();
+  syncAiButton();
 })();
 </script>
 </body>

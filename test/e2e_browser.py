@@ -53,7 +53,7 @@ async def main(channel):
 
         print("== 1. 启动 ==  ")
         chk("页面无 JS 错误", not errors, errors[:3])
-        chk("版本号已显示", await page.inner_text("#appVersion") == "1.1.0")
+        chk("版本号已显示", await page.inner_text("#appVersion") == "1.3.2")
         chk("mermaid 渲染出 svg", await page.locator("#previewContainer svg").count() > 0)
 
         print("== 2. Tab 缩进 / 撤销 / 重做（P0-2 P0-3）==")

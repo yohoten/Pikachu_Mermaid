@@ -108,6 +108,21 @@ const nested = runOutline('graph TD\n  subgraph R[根]\n    subgraph S[子]\n   
 ok('嵌套 subgraph 缩进分级', nested.items.length === 2 &&
   nested.items[1].indent.includes('indent-2'));
 
+/* ────────────────────────────────────────────────────────────
+ * 3. extractMermaidCode（AI 输出清洗，真实函数 + 真实 detectChartType）
+ * ──────────────────────────────────────────────────────────── */
+console.log('== 3. AI 输出提取（真实函数）==');
+const detectChartType = new Function('return (' + fnBody('detectChartType') + ')')();
+const extractMermaidCode = new Function('detectChartType',
+  'return (' + fnBody('extractMermaidCode') + ')')(detectChartType);
+const fenced = extractMermaidCode('好的，这是图表：\n```mermaid\ngraph TD\n  A --> B\n```\n希望有帮助');
+ok('fenced 代码块提取干净', fenced.valid && fenced.code.startsWith('graph TD') &&
+  fenced.code.endsWith('\n') && !fenced.code.includes('希望有帮助'));
+const bare = extractMermaidCode('下面是流程：\nflowchart LR\n  A --> B');
+ok('无围栏时从图表声明开始', bare.valid && bare.code.startsWith('flowchart LR'));
+const prose = extractMermaidCode('这只是一段说明文字');
+ok('非图表输出标记为无效', !prose.valid && prose.type === '未知');
+
 console.log('');
 console.log(fail ? 'FAILED (' + fail + ')' : 'ALL FUNCTIONAL TESTS PASSED (' + pass + ')');
 process.exit(fail ? 1 : 0);
